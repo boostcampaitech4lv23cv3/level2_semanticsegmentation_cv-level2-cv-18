@@ -25,6 +25,7 @@ class BaseDataset(Dataset):
         self.dataset_path = dataset_path
         self.transform = transform
         self.global_config = global_config
+        self.keys = list(self.global_config['Category'].keys())
         if self.mode == 'train':
             self.json_name = 'train.json'
         elif mode == 'val':
@@ -62,7 +63,7 @@ class BaseDataset(Dataset):
             anns = sorted(anns, key=lambda idx : idx['area'], reverse=True) # type: ignore    
             for i in range(len(anns)):
                 className = get_classname(anns[i]['category_id'], cats)
-                pixel_value =  self.global_config['Category'][className]
+                pixel_value =  self.keys.index(className)
                 masks[self.coco.annToMask(anns[i]) == 1] = pixel_value
             masks = masks.astype(np.int8)
                         
