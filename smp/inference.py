@@ -1,5 +1,4 @@
 import os
-from datetime import datetime
 from argparse import ArgumentParser, Namespace
 import warnings 
 warnings.filterwarnings('ignore')
@@ -19,6 +18,8 @@ from utils import *
 from models import *
 from data_loader import *
 
+INFERENCE_SIZE = 256 # This is a constant
+
 def parse_args() -> Namespace:
     parser = ArgumentParser()
     parser.add_argument('--config_path', type=str, default='./')
@@ -28,8 +29,8 @@ def parse_args() -> Namespace:
     parser.add_argument('--sample_name', type=str, default='sample_submission.csv')
     parser.add_argument('--submission_path', type=str, default='../.local/submission')
     parser.add_argument('--submission_name', type=str, default='{time}_{model}_submission.csv')
-    parser.add_argument('--save_path', type=str, default='../.local/checkpoints')
-    parser.add_argument('--save_file', type=str)
+    parser.add_argument('--load_path', type=str, default='../.local/checkpoints')
+    parser.add_argument('--load_file', type=str, default='FCN_Resnet50_best.tar')
     
     parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu')
     parser.add_argument('--batch_size', type=int, default=16)
@@ -37,7 +38,7 @@ def parse_args() -> Namespace:
     return args
 
 def test(args:Namespace, model, test_loader):
-    INFERENCE_SIZE = 256 # This is a constant
+    
     transform = A.Compose([A.Resize(INFERENCE_SIZE, INFERENCE_SIZE)])
     print('Start prediction.')
     
@@ -71,32 +72,29 @@ def test(args:Namespace, model, test_loader):
     
     return file_names, preds_array
 
-def submission(args:Namespace, model, test_loader):
-    # make dir
-    os.makedirs(args.submission_path, exist_ok=True)
-
-    # get current time
-    now = datetime.now()
-    time = now.strftime('%Y-%m-%d %H:%M:%S')
+def submission(args:Namespace, model, test_loader, time:str):
 
     # set path
     sample_path = os.path.join(args.sample_path, args.sample_name)
+    os.makedirs(args.submission_path, exist_ok=True)
     submission_path = os.path.join(args.submission_path, args.submission_name.format(time=time, model=model.__class__.__name__))
 
     # sample_submisson.csv 열기
     submission = pd.read_csv(sample_path, index_col=None)
 
     # test set에 대한 prediction
-    file_names, preds = test(model, test_loader, args.device)
+    file_names, preds = test(args=args, model=model, test_loader=test_loader)
 
+    print(' * Make Submission data')
     # PredictionString 대입
-    for file_name, string in zip(file_names, preds):
+    for file_name, string in tqdm(zip(file_names, preds)):
         submission = submission.append({"image_id" : file_name, "PredictionString" : ' '.join(str(e) for e in string.tolist())}, 
                                        ignore_index=True)
 
+    print(' * Save Submission')
     # submission.csv로 저장
-
     submission.to_csv(submission_path, index=False)
+    print(' - submission file has been saved at ', submission_path)
 
 def main(args:Namespace):
 
@@ -118,10 +116,16 @@ def main(args:Namespace):
                                               num_workers=4,
                                               collate_fn=collate_fn)
 
-    print(' * Create Model / Criterion / optimizer')
-    model = FCN_Resnet50()
+    print(' * Load Data')
+    ckp_data = load_model(args=args)
+    ckp_data.describe_data()
 
+    print(' * Create model from checkpoint data')
+    model = ckp_data.create_model_from_data()
+    model = model.to(args.device)
+    
     print(' * Start Inference')
+    submission(args=args, model=model, test_loader=test_loader, time=ckp_data.start_time)
 
 
 if __name__ == '__main__':
