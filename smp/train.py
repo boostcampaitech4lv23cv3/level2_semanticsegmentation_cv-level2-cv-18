@@ -79,7 +79,7 @@ def validation(epoch:int, model, data_loader:DataLoader, criterion, device:str, 
 def train(args:Namespace, global_config:dict, model, optimizer, criterion, train_loader, val_loader):
     # get current time
     now = datetime.now()
-    time = now.strftime('%Y-%m-%d %H:%M:%S')
+    time = now.strftime('%Y-%m-%d %H.%M.%S')
 
     # get params from args
     n_class = 11
