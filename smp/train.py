@@ -27,8 +27,9 @@ def parse_args() -> Namespace:
     parser.add_argument('--data_path', type=str, default='../../input/data')
     parser.add_argument('--save_path', type=str, default='../.local/checkpoints')
     parser.add_argument('--save_name', type=str, default='{model}_best.tar')
-    
     parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu')
+    
+    parser.add_argument('--model', type=str, default='FCN_Resnet50')
     parser.add_argument('--batch_size', type=int, default=16)
     parser.add_argument('--val_every', type=int, default=1)
     parser.add_argument('--epoch', type=int, default=20)
@@ -162,7 +163,7 @@ def main(args:Namespace):
                                              collate_fn=collate_fn)
 
     print(' * Create Model / Criterion / optimizer')
-    model = FCN_Resnet50()
+    model = eval('{model}()'.format(model = args.model))
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(params = model.parameters(), lr = args.lr, weight_decay=args.weight_decay)
 
