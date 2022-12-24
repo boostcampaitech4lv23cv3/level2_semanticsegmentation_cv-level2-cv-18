@@ -140,15 +140,9 @@ def main(args:Namespace):
     val_transform = A.Compose([
                               ToTensorV2()
                               ])
-
-    test_transform = A.Compose([
-                               ToTensorV2()
-                               ])
-
     print(' * Create Datasets')
     train_dataset = BaseDataset(dataset_path=args.data_path, mode='train', transform=train_transform, global_config = global_config)
     val_dataset = BaseDataset(dataset_path=args.data_path, mode='val', transform=val_transform, global_config = global_config)
-    test_dataset = BaseDataset(dataset_path=args.data_path, mode='test', transform=test_transform, global_config = global_config)
 
     print(' * Create Loaders')
     train_loader = DataLoader(dataset=train_dataset, 
@@ -162,11 +156,6 @@ def main(args:Namespace):
                                              shuffle=False,
                                              num_workers=4,
                                              collate_fn=collate_fn)
-
-    test_loader = DataLoader(dataset=test_dataset,
-                                              batch_size=args.batch_size,
-                                              num_workers=4,
-                                              collate_fn=collate_fn)
 
     print(' * Create Model / Criterion / optimizer')
     model = FCN_Resnet50()
