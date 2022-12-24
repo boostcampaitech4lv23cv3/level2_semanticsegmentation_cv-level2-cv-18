@@ -1,4 +1,7 @@
 import cv2
+import os
+import numpy as np
+import albumentations as A
 from torch.utils.data import Dataset, DataLoader
 from pycocotools.coco import COCO
 
@@ -8,13 +11,30 @@ def get_classname(classID, cats):
             return cats[i]['name']
     return "None"
 
-class TrainDataLoader(Dataset):
-    """COCO format"""
-    def __init__(self, data_dir, mode = 'train', transform = None):
+class BaseDataset(Dataset):
+    """ 
+    Args:
+        dataset_path : dataset folder가 위치한 로컬 경로
+        mode : train / val / test 중 선택
+        transform : Compose된 transform
+        global_config : 글로벌 설정 정보(config.json)
+    """
+    def __init__(self, dataset_path:str, mode:str, transform:A.Compose, global_config:dict):
         super().__init__()
         self.mode = mode
+        self.dataset_path = dataset_path
         self.transform = transform
-        self.coco = COCO(data_dir)
+        self.global_config = global_config
+        if self.mode == 'train':
+            self.json_name = 'train.json'
+        elif mode == 'val':
+            self.json_name = 'val.json'
+        elif mode == 'test':
+            self.json_name = 'test.json'
+        else:
+            raise ValueError("ERROR : Wrong mode")
+        self.target_annotation_file = os.path.join(self.dataset_path, self.json_name)
+        self.coco = COCO(self.target_annotation_file)
 
     def __getitem__(self, index: int):
         # dataset이 index되어 list처럼 동작
@@ -22,7 +42,7 @@ class TrainDataLoader(Dataset):
         image_infos = self.coco.loadImgs(image_id)[0] # type: ignore    
         
         # cv2 를 활용하여 image 불러오기
-        images = cv2.imread(os.path.join(dataset_path, image_infos['file_name']))
+        images = cv2.imread(os.path.join(self.dataset_path, image_infos['file_name']))
         images = cv2.cvtColor(images, cv2.COLOR_BGR2RGB).astype(np.float32)
         images /= 255.0
         
@@ -39,10 +59,10 @@ class TrainDataLoader(Dataset):
             # Background = 0
             masks = np.zeros((image_infos["height"], image_infos["width"]))
             # General trash = 1, ... , Cigarette = 10
-            anns = sorted(anns, key=lambda idx : idx['area'], reverse=True)
+            anns = sorted(anns, key=lambda idx : idx['area'], reverse=True) # type: ignore    
             for i in range(len(anns)):
                 className = get_classname(anns[i]['category_id'], cats)
-                pixel_value = category_names.index(className)
+                pixel_value =  self.global_config['Category'][className]
                 masks[self.coco.annToMask(anns[i]) == 1] = pixel_value
             masks = masks.astype(np.int8)
                         
