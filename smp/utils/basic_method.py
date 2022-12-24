@@ -48,11 +48,3 @@ def label_accuracy_score(hist):
     fwavacc = (freq[freq > 0] * iu[freq > 0]).sum()
     return acc, acc_cls, mean_iu, fwavacc, iu
 
-
-def save_model(model, saved_dir:str='../.local/', file_name:str='Unnamed_model.pt'):
-    os.makedirs(saved_dir, exist_ok=True)
-    if not os.path.isdir(saved_dir):     
-        os.makedirs(saved_dir, exist_ok=True)
-
-    output_path = os.path.join(saved_dir, file_name)
-    torch.save(model, output_path)

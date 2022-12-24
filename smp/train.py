@@ -1,5 +1,5 @@
 import os
-import time
+from datetime import datetime
 from argparse import ArgumentParser, Namespace
 import warnings 
 warnings.filterwarnings('ignore')
@@ -26,7 +26,7 @@ def parse_args() -> Namespace:
     parser.add_argument('--config_file', type=str, default='config.json')
     parser.add_argument('--data_path', type=str, default='../../input/data')
     parser.add_argument('--save_path', type=str, default='../.local/checkpoints')
-    parser.add_argument('--save_name', type=str, default='{model}_best.pth')
+    parser.add_argument('--save_name', type=str, default='{model}_best.tar')
     
     parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu')
     parser.add_argument('--batch_size', type=int, default=16)
@@ -77,13 +77,17 @@ def validation(epoch:int, model, data_loader:DataLoader, criterion, device:str, 
     return avrg_loss
 
 def train(args:Namespace, global_config:dict, model, optimizer, criterion, train_loader, val_loader):
+    # get current time
+    now = datetime.now()
+    time = now.strftime('%Y-%m-%d %H:%M:%S')
+
+    # get params from args
     n_class = 11
     best_loss = 9999999
     num_epochs = args.epoch
     device = args.device
     val_every = args.val_every
-    saved_dir = args.save_path
-    file_name = args.save_name.format(model=model.__class__.__name__)
+
     for epoch in range(num_epochs):
         model.train()
 
@@ -115,24 +119,23 @@ def train(args:Namespace, global_config:dict, model, optimizer, criterion, train
             
             # step 주기에 따른 loss 출력
             if (step + 1) % 25 == 0:
-                print(f'Epoch [{epoch+1}/{num_epochs}], Step [{step+1}/{len(train_loader)}], \
-                        Loss: {round(loss.item(),4)}, mIoU: {round(mIoU,4)}')
+                print(f'Epoch [{epoch+1}/{num_epochs}], Step [{step+1}/{len(train_loader)}], Loss: {round(loss.item(),4)}, mIoU: {round(mIoU,4)}')
              
         # validation 주기에 따른 loss 출력 및 best model 저장
         if (epoch + 1) % val_every == 0:
             avrg_loss = validation(epoch + 1, model, val_loader, criterion, device, global_config=global_config)
             if avrg_loss < best_loss:
                 print(f"Best performance at epoch: {epoch + 1}")
-                print(f"Save model in {saved_dir}")
                 best_loss = avrg_loss
-                save_model(model = model, saved_dir=saved_dir, file_name=file_name)
+                save_model(best_loss=best_loss, best_epoch=epoch + 1, args= args, model=model, optimizer=optimizer, criterion=criterion, time=time)
 
 def main(args:Namespace):
     print(' * Fix Seed')    
     fix_seed(args.seed)
+
     print(' * Load Config')
     global_config = load_json(os.path.join(args.config_path, args.config_file))
-    print(global_config)
+
     print(' * Create Transforms')
     train_transform = A.Compose([
                             ToTensorV2()
@@ -140,6 +143,7 @@ def main(args:Namespace):
     val_transform = A.Compose([
                               ToTensorV2()
                               ])
+                              
     print(' * Create Datasets')
     train_dataset = BaseDataset(dataset_path=args.data_path, mode='train', transform=train_transform, global_config = global_config)
     val_dataset = BaseDataset(dataset_path=args.data_path, mode='val', transform=val_transform, global_config = global_config)
