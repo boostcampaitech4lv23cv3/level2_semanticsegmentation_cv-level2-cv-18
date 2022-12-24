@@ -21,19 +21,19 @@ from data_loader import *
 
 def parse_args() -> Namespace:
     parser = ArgumentParser()
+    parser.add_argument('--seed', type=int, default=21)
     parser.add_argument('--config_path', type=str, default='./')
     parser.add_argument('--config_file', type=str, default='config.json')
-    parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu')
     parser.add_argument('--data_path', type=str, default='../../input/data')
     parser.add_argument('--save_path', type=str, default='../.local/checkpoints')
-    parser.add_argument('--anns_file', type=str, default='train_all.json')
-    parser.add_argument('--seed', type=int, default=21)
+    parser.add_argument('--save_name', type=str, default='{model}_best.pth')
+    
+    parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu')
     parser.add_argument('--batch_size', type=int, default=16)
     parser.add_argument('--val_every', type=int, default=1)
     parser.add_argument('--epoch', type=int, default=20)
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--weight_decay', type=float, default=1e-4)
-    parser.add_argument('--optimizer', type=str, default='SGD()')
     args = parser.parse_args()
     return args
 
@@ -68,7 +68,7 @@ def validation(epoch:int, model, data_loader:DataLoader, criterion, device:str, 
             hist = add_hist(hist, masks, outputs, n_class=n_class)
         
         acc, acc_cls, mIoU, fwavacc, IoU = label_accuracy_score(hist)
-        IoU_by_class = [{classes : round(IoU,4)} for IoU, classes in zip(IoU , global_config['Categories'])]
+        IoU_by_class = [{classes : round(IoU,4)} for IoU, classes in zip(IoU , global_config['Category'])]
         
         avrg_loss = total_loss / cnt
         print(f'Validation #{epoch}  Average Loss: {round(avrg_loss.item(), 4)}, Accuracy : {round(acc, 4)}, mIoU: {round(mIoU, 4)}') # type: ignore
@@ -83,6 +83,7 @@ def train(args:Namespace, global_config:dict, model, optimizer, criterion, train
     device = args.device
     val_every = args.val_every
     saved_dir = args.save_path
+    file_name = args.save_name.format(model=model.__class__.__name__)
     for epoch in range(num_epochs):
         model.train()
 
@@ -124,7 +125,7 @@ def train(args:Namespace, global_config:dict, model, optimizer, criterion, train
                 print(f"Best performance at epoch: {epoch + 1}")
                 print(f"Save model in {saved_dir}")
                 best_loss = avrg_loss
-                save_model(model, saved_dir)
+                save_model(model = model, saved_dir=saved_dir, file_name=file_name)
 
 def main(args:Namespace):
     print(' * Fix Seed')    
