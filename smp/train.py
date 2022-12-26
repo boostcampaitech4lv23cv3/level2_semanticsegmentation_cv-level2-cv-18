@@ -24,8 +24,7 @@ import wandb
 def parse_args() -> Namespace:
     parser = ArgumentParser()
     parser.add_argument('--wandb_enable', type=bool, default=True)
-    parser.add_argument('--wandb_project', type=str, default='Trash Segmentation')
-    parser.add_argument('--wandb_name', type=str, default='{model}')
+    parser.add_argument('--wandb_name', type=str, default=None)
     parser.add_argument('--seed', type=int, default=21)
     parser.add_argument('--config_path', type=str, default='./')
     parser.add_argument('--config_file', type=str, default='config.json')
@@ -46,8 +45,9 @@ def parse_args() -> Namespace:
 def init_wandb(args:Namespace):
     if args.wandb_enable :
         wandb.init(
-            project=args.wandb_project, # set the wandb project where this run will be logged
-            name=args.wandb_name.format(model = args.model),
+            entity="light-observer",
+            project="Trash Segmentation",
+            name=args.model if args.wandb_name == None else args.wandb_name,
             config=args.__dict__ # track hyperparameters and run metadata
         )
 
@@ -90,15 +90,15 @@ def validation(epoch:int, model, data_loader:DataLoader, criterion, device:str, 
         # wandb logging
         if args.wandb_enable :
             log = {
-                'val_loss'   :avrg_loss,
-                'val_acc'    :acc,
-                'val_acc_cls':acc_cls,
-                'val_mIoU'   :mIoU,
-                'val_fwavacc':fwavacc,
+                'val/loss'   :avrg_loss,
+                'val/acc'    :acc,
+                'val/acc_cls':acc_cls,
+                'val/mIoU'   :mIoU,
+                'val/fwavacc':fwavacc,
             }
             for kv in IoU_by_class : 
                 key = list(kv.keys())[0]
-                log['val_IoU_{key}'.format(key=key)] = kv[key]
+                log['val/IoU_{key}'.format(key=key)] = kv[key]
             wandb.log(log)
         
     return avrg_loss
@@ -159,12 +159,12 @@ def train(args:Namespace, global_config:dict, model, optimizer, criterion, train
         # wandb logging
         if args.wandb_enable :
             log = {
-                'LR'   : optimizer.param_groups[0]['lr'],
-                'train_loss'   :np.average(np.array(train_loss)),
-                'train_acc'    :np.average(np.array(train_acc)),
-                'train_acc_cls':np.average(np.array(train_acc_cls)),
-                'train_mIoU'   :np.average(np.array(train_mIoU)),
-                'train_fwavacc':np.average(np.array(train_fwavacc)),
+                'train/LR'     : optimizer.param_groups[0]['lr'],
+                'train/loss'   :np.average(np.array(train_loss)),
+                'train/acc'    :np.average(np.array(train_acc)),
+                'train/acc_cls':np.average(np.array(train_acc_cls)),
+                'train/mIoU'   :np.average(np.array(train_mIoU)),
+                'train/fwavacc':np.average(np.array(train_fwavacc)),
             }
             wandb.log(log)
         
