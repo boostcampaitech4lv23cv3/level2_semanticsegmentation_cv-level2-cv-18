@@ -19,8 +19,13 @@ from utils import *
 from models import *
 from data_loader import *
 
+import wandb
+
 def parse_args() -> Namespace:
     parser = ArgumentParser()
+    parser.add_argument('--wandb_enable', type=bool, default=True)
+    parser.add_argument('--wandb_project', type=str, default='Trash Segmentation')
+    parser.add_argument('--wandb_name', type=str, default='{model}')
     parser.add_argument('--seed', type=int, default=21)
     parser.add_argument('--config_path', type=str, default='./')
     parser.add_argument('--config_file', type=str, default='config.json')
@@ -37,6 +42,14 @@ def parse_args() -> Namespace:
     parser.add_argument('--weight_decay', type=float, default=1e-4)
     args = parser.parse_args()
     return args
+
+def init_wandb(args:Namespace):
+    if args.wandb_enable :
+        wandb.init(
+            project=args.wandb_project, # set the wandb project where this run will be logged
+            name=args.wandb_name.format(model = args.model),
+            config=args.__dict__ # track hyperparameters and run metadata
+        )
 
 def validation(epoch:int, model, data_loader:DataLoader, criterion, device:str, global_config:dict):
     print(f'Start validation #{epoch}')
@@ -70,10 +83,23 @@ def validation(epoch:int, model, data_loader:DataLoader, criterion, device:str, 
         
         acc, acc_cls, mIoU, fwavacc, IoU = label_accuracy_score(hist)
         IoU_by_class = [{classes : round(IoU,4)} for IoU, classes in zip(IoU , global_config['Category'])]
-        
         avrg_loss = total_loss / cnt
+        
         print(f'Validation #{epoch}  Average Loss: {round(avrg_loss.item(), 4)}, Accuracy : {round(acc, 4)}, mIoU: {round(mIoU, 4)}') # type: ignore
         print(f'IoU by class : {IoU_by_class}')
+        # wandb logging
+        if args.wandb_enable :
+            log = {
+                'val_loss'   :avrg_loss,
+                'val_acc'    :acc,
+                'val_acc_cls':acc_cls,
+                'val_mIoU'   :mIoU,
+                'val_fwavacc':fwavacc,
+            }
+            for kv in IoU_by_class : 
+                key = list(kv.keys())[0]
+                log['val_IoU_{key}'.format(key=key)] = kv[key]
+            wandb.log(log)
         
     return avrg_loss
 
@@ -91,7 +117,11 @@ def train(args:Namespace, global_config:dict, model, optimizer, criterion, train
 
     for epoch in range(num_epochs):
         model.train()
-
+        train_loss = []
+        train_acc = []
+        train_acc_cls = []
+        train_mIoU = []
+        train_fwavacc = []
         hist = np.zeros((n_class, n_class))
         for step, (images, masks, _) in enumerate(train_loader):
             images = torch.stack(images)       
@@ -117,11 +147,27 @@ def train(args:Namespace, global_config:dict, model, optimizer, criterion, train
             
             hist = add_hist(hist, masks, outputs, n_class=n_class)
             acc, acc_cls, mIoU, fwavacc, IoU = label_accuracy_score(hist)
-            
             # step 주기에 따른 loss 출력
             if (step + 1) % 25 == 0:
                 print(f'Epoch [{epoch+1}/{num_epochs}], Step [{step+1}/{len(train_loader)}], Loss: {round(loss.item(),4)}, mIoU: {round(mIoU,4)}')
+            train_loss.append(loss.item())
+            train_acc.append(acc)
+            train_acc_cls.append(acc_cls)
+            train_mIoU.append(mIoU)
+            train_fwavacc.append(fwavacc)
              
+        # wandb logging
+        if args.wandb_enable :
+            log = {
+                'LR'   : optimizer.param_groups[0]['lr'],
+                'train_loss'   :np.average(np.array(train_loss)),
+                'train_acc'    :np.average(np.array(train_acc)),
+                'train_acc_cls':np.average(np.array(train_acc_cls)),
+                'train_mIoU'   :np.average(np.array(train_mIoU)),
+                'train_fwavacc':np.average(np.array(train_fwavacc)),
+            }
+            wandb.log(log)
+        
         # validation 주기에 따른 loss 출력 및 best model 저장
         if (epoch + 1) % val_every == 0:
             avrg_loss = validation(epoch + 1, model, val_loader, criterion, device, global_config=global_config)
@@ -129,6 +175,7 @@ def train(args:Namespace, global_config:dict, model, optimizer, criterion, train
                 print(f"Best performance at epoch: {epoch + 1}")
                 best_loss = avrg_loss
                 save_model(best_loss=best_loss, best_epoch=epoch + 1, args= args, model=model, optimizer=optimizer, criterion=criterion, time=time)
+        
 
 def main(args:Namespace):
     print(' * Fix Seed')    
@@ -173,4 +220,5 @@ def main(args:Namespace):
 
 if __name__ == '__main__':
     args = parse_args()
+    init_wandb(args=args)
     main(args)
