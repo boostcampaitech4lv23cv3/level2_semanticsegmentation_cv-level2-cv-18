@@ -26,7 +26,7 @@ def parse_args() -> Namespace:
     parser.add_argument('--config_file', type=str, default='config.json')
     parser.add_argument('--data_path', type=str, default='../../input/data')
     parser.add_argument('--save_path', type=str, default='../.local/checkpoints')
-    parser.add_argument('--save_name', type=str, default='{model}_best.tar')
+    parser.add_argument('--save_name', type=str, default='{model}/{time}_best.tar')
     parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu')
     
     parser.add_argument('--model', type=str, default='FCN_Resnet50')
