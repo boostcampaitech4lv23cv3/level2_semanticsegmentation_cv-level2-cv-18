@@ -21,6 +21,7 @@ torchaudio = "==0.13.1"
 wandb = "*"
 
 [dev-packages]
+gpustat = "*"
 
 [requires]
 python_version = "3.8"

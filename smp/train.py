@@ -201,12 +201,14 @@ def main(args:Namespace):
                                            batch_size=args.batch_size,
                                            shuffle=True,
                                            num_workers=4,
+                                           worker_init_fn=seed_worker,
                                            collate_fn=collate_fn)
 
     val_loader = DataLoader(dataset=val_dataset, 
                                              batch_size=args.batch_size,
                                              shuffle=False,
                                              num_workers=4,
+                                             worker_init_fn=seed_worker,
                                              collate_fn=collate_fn)
 
     print(' * Create Model / Criterion / optimizer')
