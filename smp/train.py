@@ -40,8 +40,8 @@ def parse_args() -> Namespace:
     parser.add_argument('--epoch', type=int, default=20)
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--weight_decay', type=float, default=1e-4)
-    parser.add_argument('--scheduler_step', type=float, default=5)
-    parser.add_argument('--scheduler_gamma', type=float, default=0.1)
+    parser.add_argument('--scheduler_step', type=float, default=10)
+    parser.add_argument('--scheduler_gamma', type=float, default=0.5)
     
     args = parser.parse_args()
     return args
