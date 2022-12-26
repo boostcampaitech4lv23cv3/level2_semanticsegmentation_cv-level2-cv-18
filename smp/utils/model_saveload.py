@@ -1,8 +1,23 @@
 import os
 import torch
 import argparse
+import json
 from models import *
 from torch.optim.optimizer import Optimizer
+
+def make_directory(path:str):
+    fd = os.path.dirname(path)
+    if(fd == ''):
+        return
+    else:
+        os.makedirs(fd, exist_ok=True)
+        if not os.path.isdir(fd):     
+            os.makedirs(fd, exist_ok=True)
+
+def save_args(args:argparse.Namespace, path:str):
+    make_directory(path=path)
+    with open(path, 'w') as outfile:
+        json.dump(args.__dict__, outfile, indent = 4, sort_keys = True)
 
 def save_model(best_loss:float, best_epoch:int, args:argparse.Namespace, model, optimizer, criterion, time, include_optimizer_state:bool = False):
     '''
@@ -21,7 +36,7 @@ def save_model(best_loss:float, best_epoch:int, args:argparse.Namespace, model, 
 
     # get params from args
     saved_dir = args.save_path
-    file_name = args.save_name.format(model=model.__class__.__name__)
+    file_name = args.save_name.format(model=model.__class__.__name__, time=time)
 
     # make dict
     save_obj = {
@@ -39,13 +54,13 @@ def save_model(best_loss:float, best_epoch:int, args:argparse.Namespace, model, 
         save_obj['optimizer_state'] = optimizer.state_dict()
 
     # set directory
-    os.makedirs(saved_dir, exist_ok=True)
-    if not os.path.isdir(saved_dir):     
-        os.makedirs(saved_dir, exist_ok=True)
     output_path = os.path.join(saved_dir, file_name)
-
+    make_directory(path = output_path)
+    save_args(args=args, path=output_path+'.json')
+    
     # save
     torch.save(save_obj, output_path)
+    
     print(f"The data has been saved at {output_path}")
 
 
