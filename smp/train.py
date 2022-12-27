@@ -20,6 +20,8 @@ from models import *
 from data_loader import *
 
 import wandb
+from sweep import *
+from functools import partial
 
 class_labels = {
     0: "Background",
@@ -59,17 +61,9 @@ def parse_args() -> Namespace:
     parser.add_argument('--scheduler_gamma', type=float, default=0.5)
     
     parser.add_argument('--valid_img', type=bool, default=True)
+    parser.add_argument('--sweep', type=bool, default=False)
     args = parser.parse_args()
     return args
-
-def init_wandb(args:Namespace):
-    if args.wandb_enable :
-        wandb.init(
-            entity="light-observer",
-            project="Trash Segmentation",
-            name=args.model if args.wandb_name == None else args.wandb_name,
-            config=args.__dict__ # track hyperparameters and run metadata
-        )
 
 def validation(epoch:int, model, data_loader:DataLoader, criterion, device:str, global_config:dict):
     print(f'Start validation #{epoch}')
@@ -230,6 +224,13 @@ def train(args:Namespace, global_config:dict, model, optimizer, criterion, sched
 
 
 def main(args:Namespace):
+    if args.sweep:
+        sweep_init(args)
+        args = concat_config(args, wandb.config)
+    
+    else:
+        init_wandb(args=args)
+                
     print(' * Fix Seed')    
     fix_seed(args.seed)
 
@@ -262,7 +263,7 @@ def main(args:Namespace):
                                              num_workers=4,
                                              worker_init_fn=seed_worker,
                                              collate_fn=collate_fn)
-
+        
     print(' * Create Model / Criterion / optimizer')
     model = eval('{model}()'.format(model = args.model))
     criterion = nn.CrossEntropyLoss()
@@ -275,5 +276,12 @@ def main(args:Namespace):
 
 if __name__ == '__main__':
     args = parse_args()
-    init_wandb(args=args)
-    main(args)
+    if args.sweep:
+        sweep_config = get_sweep_config()
+        sweep_id = get_sweep_id(sweep_config)
+        wandb.agent(sweep_id, function=partial(main, args))
+        # sweep_init(args)
+        args = concat_config(args, wandb.config)
+    
+    else:
+        main(args)
