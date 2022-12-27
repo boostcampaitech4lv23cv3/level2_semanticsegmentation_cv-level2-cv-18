@@ -39,6 +39,8 @@ def parse_args() -> Namespace:
     parser = ArgumentParser()
     parser.add_argument('--wandb_enable', type=bool, default=True)
     parser.add_argument('--wandb_name', type=str, default=None)
+    parser.add_argument('--notion_post_enable', type=bool, default=True)
+    parser.add_argument('--notion_post_name', type=str, default='{model}')
     parser.add_argument('--seed', type=int, default=21)
     parser.add_argument('--config_path', type=str, default='./')
     parser.add_argument('--config_file', type=str, default='config.json')
@@ -50,7 +52,7 @@ def parse_args() -> Namespace:
     parser.add_argument('--model', type=str, default='FCN_Resnet50')
     parser.add_argument('--batch_size', type=int, default=8)
     parser.add_argument('--val_every', type=int, default=1)
-    parser.add_argument('--epoch', type=int, default=20)
+    parser.add_argument('--epoch', type=int, default=10)
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--weight_decay', type=float, default=1e-4)
     parser.add_argument('--scheduler_step', type=float, default=10)
@@ -134,7 +136,7 @@ def validation(epoch:int, model, data_loader:DataLoader, criterion, device:str, 
                 log['val/IoU_{key}'.format(key=key)] = kv[key]
             wandb.log(log)
         
-    return avrg_loss
+    return avrg_loss, mIoU
 
 def train(args:Namespace, global_config:dict, model, optimizer, criterion, scheduler, train_loader, val_loader):
     # get current time
@@ -144,6 +146,7 @@ def train(args:Namespace, global_config:dict, model, optimizer, criterion, sched
     # get params from args
     n_class = 11
     best_loss = 9999999
+    best_mIoU = 0
     num_epochs = args.epoch
     device = args.device
     val_every = args.val_every
@@ -206,12 +209,25 @@ def train(args:Namespace, global_config:dict, model, optimizer, criterion, sched
         
         # validation 주기에 따른 loss 출력 및 best model 저장
         if (epoch + 1) % val_every == 0:
-            avrg_loss = validation(epoch + 1, model, val_loader, criterion, device, global_config=global_config)
-            if avrg_loss < best_loss:
+            avrg_loss, val_mIoU = validation(epoch + 1, model, val_loader, criterion, device, global_config=global_config)
+            if best_mIoU < val_mIoU:
                 print(f"Best performance at epoch: {epoch + 1}")
                 best_loss = avrg_loss
+                best_mIoU = val_mIoU
                 save_model(best_loss=best_loss, best_epoch=epoch + 1, args= args, model=model, optimizer=optimizer, criterion=criterion, time=time)
-        
+    
+    # post this result to notion
+    if(args.notion_post_enable):
+        nw = NotionAutoWriter(global_config)
+        post_name = args.notion_post_name.format(time=time, model=args.model)
+        run = wandb.run
+        url = run.get_url()
+        content = json.dumps(args.__dict__, indent=4, sort_keys=True)
+        nw.post_page(title = post_name, remark = '-', 
+                            val_score = best_mIoU, test_score = 0.0,
+                            wandb_link = url, contents = [" * Start Time * " , time , " * Test Args * ", content]
+                    )
+
 
 def main(args:Namespace):
     print(' * Fix Seed')    

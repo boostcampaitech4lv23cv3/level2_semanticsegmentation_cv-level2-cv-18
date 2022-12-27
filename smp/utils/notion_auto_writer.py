@@ -25,7 +25,7 @@ class NotionAutoWriter:
 
     def post_page(self, title:str = 'untitled post', remark:str = '-', 
                         val_score:float = 0.0, test_score:float = 0.0,
-                        wandb_link:str = '-', content:str = '-'
+                        wandb_link:str = '-', contents:list = ['-']
                 ) -> int:
         createUrl = 'https://api.notion.com/v1/pages'
         databaseId = self.database_id
@@ -60,23 +60,25 @@ class NotionAutoWriter:
                 "Test Score": test_score,
                 "WandB Link": wandb_link,
             },
-            "children": [
-                    {
-                        "parent": { "database_id": databaseId },
-                        "object": "block",
-                        "paragraph": {
-                            "rich_text": [
-                                {
-                                    "text": {
-                                        "content": content
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                ]
+            "children": []
         }
-
+        children = []
+        for c in contents:
+            content = {
+                "parent": { "database_id": databaseId },
+                "object": "block",
+                "paragraph": {
+                    "rich_text": [
+                        {
+                            "text": {
+                                "content": c
+                            }
+                        }
+                    ]
+                }
+            }
+            children.append(content)
+        newPageData["children"] = children
         data = json.dumps(newPageData)
         # print(str(uploadData))
 
