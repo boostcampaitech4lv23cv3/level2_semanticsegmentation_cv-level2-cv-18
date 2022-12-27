@@ -224,7 +224,7 @@ def train(args:Namespace, global_config:dict, model, optimizer, criterion, sched
         url = run.get_url()
         content = json.dumps(args.__dict__, indent=4, sort_keys=True)
         nw.post_page(title = post_name, remark = '-', 
-                            val_score = best_mIoU, test_score = 0.0,
+                            val_score = round(best_mIoU, 4), test_score = 0.0,
                             wandb_link = url, contents = [" * Start Time * " , time , " * Test Args * ", content]
                     )
 
