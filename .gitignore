@@ -1,5 +1,6 @@
 # local folder
 .local/*
+.vscode/*
 work_dirs/*
 artifacts/*
 !.local/README.md
