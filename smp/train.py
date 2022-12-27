@@ -21,6 +21,20 @@ from data_loader import *
 
 import wandb
 
+class_labels = {
+    0: "Background",
+    1: "General trash",
+    2: "Paper",
+    3: "Paper pack",
+    4: "Metal",
+    5: "Glass",
+    6: "Plastic",
+    7: "Styrofoam",
+    8: "Plastic bag",
+    9: "Battery",
+    10: "Clothing",
+}
+
 def parse_args() -> Namespace:
     parser = ArgumentParser()
     parser.add_argument('--wandb_enable', type=bool, default=True)
@@ -35,11 +49,12 @@ def parse_args() -> Namespace:
     parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu')
     
     parser.add_argument('--model', type=str, default='FCN_Resnet50')
-    parser.add_argument('--batch_size', type=int, default=16)
+    parser.add_argument('--batch_size', type=int, default=8)
     parser.add_argument('--val_every', type=int, default=1)
     parser.add_argument('--epoch', type=int, default=20)
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--weight_decay', type=float, default=1e-4)
+    parser.add_argument('--valid_img', type=bool, default=True)
     args = parser.parse_args()
     return args
 
@@ -76,10 +91,25 @@ def validation(epoch:int, model, data_loader:DataLoader, criterion, device:str, 
             total_loss += loss
             cnt += 1
             
+            
             outputs = torch.argmax(outputs, dim=1).detach().cpu().numpy()
             masks = masks.detach().cpu().numpy()
             
             hist = add_hist(hist, masks, outputs, n_class=n_class)
+            if args.valid_img :
+                for i in range(5):
+                    # valid_img_setting
+                    valid_img = images[i, :, :, :].detach().cpu().numpy()
+                    valid_img = np.transpose(valid_img, (1,2,0))
+                
+                
+                    wandb.log({
+                        f'validation_img_{i}': wandb.Image(
+                            valid_img,
+                            masks={"predictions": {"mask_data": outputs[i, :, :], "class_labels": class_labels},
+                                "grund_truth": {"mask_data": masks[i, :, :], "class_labels": class_labels}}   
+                        )
+                    }, commit=False)
         
         acc, acc_cls, mIoU, fwavacc, IoU = label_accuracy_score(hist)
         IoU_by_class = [{classes : round(IoU,4)} for IoU, classes in zip(IoU , global_config['Category'])]
