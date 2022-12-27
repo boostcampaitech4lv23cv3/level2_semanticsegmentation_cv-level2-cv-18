@@ -226,7 +226,7 @@ def train(args:Namespace, global_config:dict, model, optimizer, criterion, sched
 def main(args:Namespace):
     if args.sweep:
         sweep_init(args)
-        args = concat_config(args, wandb.config)
+        # args = concat_config(args, wandb.config)
     
     else:
         init_wandb(args=args)
