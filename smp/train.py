@@ -40,6 +40,9 @@ def parse_args() -> Namespace:
     parser.add_argument('--epoch', type=int, default=20)
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--weight_decay', type=float, default=1e-4)
+    parser.add_argument('--scheduler_step', type=float, default=10)
+    parser.add_argument('--scheduler_gamma', type=float, default=0.5)
+    
     args = parser.parse_args()
     return args
 
@@ -103,7 +106,7 @@ def validation(epoch:int, model, data_loader:DataLoader, criterion, device:str, 
         
     return avrg_loss
 
-def train(args:Namespace, global_config:dict, model, optimizer, criterion, train_loader, val_loader):
+def train(args:Namespace, global_config:dict, model, optimizer, criterion, scheduler, train_loader, val_loader):
     # get current time
     now = datetime.now()
     time = now.strftime('%Y-%m-%d %H.%M.%S')
@@ -155,7 +158,10 @@ def train(args:Namespace, global_config:dict, model, optimizer, criterion, train
             train_acc_cls.append(acc_cls)
             train_mIoU.append(mIoU)
             train_fwavacc.append(fwavacc)
-             
+
+        # step schduler
+        scheduler.step()
+
         # wandb logging
         if args.wandb_enable :
             log = {
@@ -213,9 +219,10 @@ def main(args:Namespace):
     model = eval('{model}()'.format(model = args.model))
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(params = model.parameters(), lr = args.lr, weight_decay=args.weight_decay)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer=optimizer, step_size=args.scheduler_step, gamma = args.scheduler_gamma)
 
     print(' * Start Training')
-    train(args, global_config, model=model, optimizer=optimizer, criterion=criterion, train_loader=train_loader, val_loader=val_loader)
+    train(args, global_config, model=model, optimizer=optimizer, criterion=criterion, scheduler=scheduler, train_loader=train_loader, val_loader=val_loader)
 
 
 if __name__ == '__main__':
