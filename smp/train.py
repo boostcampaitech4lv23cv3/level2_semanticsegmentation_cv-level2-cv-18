@@ -14,6 +14,7 @@ from albumentations.pytorch import ToTensorV2
 import torch
 import torch.nn as nn
 from torchvision import models
+from torch.cuda.amp import GradScaler, autocast
 
 from utils import *
 from models import *
@@ -162,6 +163,9 @@ def train(args:Namespace, global_config:dict, model, optimizer, criterion, sched
     device = args.device
     val_every = args.val_every
 
+    # Creates a GradScaler once at the beginning of training.
+    scaler = GradScaler()
+
     for epoch in range(num_epochs):
         model.train()
         train_loss = []
@@ -171,6 +175,8 @@ def train(args:Namespace, global_config:dict, model, optimizer, criterion, sched
         train_fwavacc = []
         hist = np.zeros((n_class, n_class))
         for step, (images, masks, _) in enumerate(train_loader):
+            optimizer.zero_grad()
+            
             images = torch.stack(images)       
             masks = torch.stack(masks).long() 
             
@@ -179,15 +185,25 @@ def train(args:Namespace, global_config:dict, model, optimizer, criterion, sched
             
             # device 할당
             model = model.to(device)
+            with autocast():
+                # inference
+                outputs = model(images)['out']
+
+                # loss 계산 (cross entropy loss)
+                loss = criterion(outputs, masks)
             
-            # inference
-            outputs = model(images)['out']
+             # Scales loss.  Calls backward() on scaled loss to create scaled gradients.
+            # Backward passes under autocast are not recommended.
+            # Backward ops run in the same dtype autocast chose for corresponding forward ops.
+            scaler.scale(loss).backward() # loss.backward()
             
-            # loss 계산 (cross entropy loss)
-            loss = criterion(outputs, masks)
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
+            # scaler.step() first unscales the gradients of the optimizer's assigned params.
+            # If these gradients do not contain infs or NaNs, optimizer.step() is then called,
+            # otherwise, optimizer.step() is skipped.
+            scaler.step(optimizer) # optimizer.step()
+
+            # Updates the scale for next iteration.
+            scaler.update()
             
             outputs = torch.argmax(outputs, dim=1).detach().cpu().numpy()
             masks = masks.detach().cpu().numpy()
