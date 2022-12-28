@@ -65,15 +65,6 @@ def parse_args() -> Namespace:
     args = parser.parse_args()
     return args
 
-def get_optimizer(model, args:Namespace) -> Optimizer:
-    optim_type = args.optimizer
-    if optim_type == 'adam':
-        return torch.optim.Adam(params = model.parameters(), lr = args.lr, weight_decay=args.weight_decay)
-    elif optim_type == 'sgd':
-        return torch.optim.SGD(params = model.parameters(), lr = args.lr, weight_decay=args.weight_decay, momentum=args.momentum)
-    else:
-        raise Exception()
-
 def init_wandb(args:Namespace):
     if args.wandb_enable :
         wandb.init(
