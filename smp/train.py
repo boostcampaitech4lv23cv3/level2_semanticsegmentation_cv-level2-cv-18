@@ -54,13 +54,24 @@ def parse_args() -> Namespace:
     parser.add_argument('--val_every', type=int, default=1)
     parser.add_argument('--epoch', type=int, default=10)
     parser.add_argument('--lr', type=float, default=1e-4)
+    parser.add_argument('--optimizer', type=str, default='adam')
     parser.add_argument('--weight_decay', type=float, default=1e-4)
+    parser.add_argument('--momentum', type=float, default=0.9)
     parser.add_argument('--scheduler_step', type=float, default=10)
     parser.add_argument('--scheduler_gamma', type=float, default=0.5)
     
     parser.add_argument('--valid_img', type=bool, default=True)
     args = parser.parse_args()
     return args
+
+def get_optimizer(model, args:Namespace) -> Optimizer:
+    optim_type = args.optimizer
+    if optim_type == 'adam':
+        return torch.optim.Adam(params = model.parameters(), lr = args.lr, weight_decay=args.weight_decay)
+    elif optim_type == 'sgd':
+        return torch.optim.SGD(params = model.parameters(), lr = args.lr, weight_decay=args.weight_decay, momentum=args.momentum)
+    else:
+        raise Exception()
 
 def init_wandb(args:Namespace):
     if args.wandb_enable :
@@ -266,7 +277,7 @@ def main(args:Namespace):
     print(' * Create Model / Criterion / optimizer')
     model = eval('{model}()'.format(model = args.model))
     criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(params = model.parameters(), lr = args.lr, weight_decay=args.weight_decay)
+    optimizer = get_optimizer(model, args=args)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer=optimizer, step_size=args.scheduler_step, gamma = args.scheduler_gamma)
 
     print(' * Start Training')
