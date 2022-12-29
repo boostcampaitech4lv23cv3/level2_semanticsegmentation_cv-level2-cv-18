@@ -283,8 +283,11 @@ def main(args:Namespace):
 
     print(' * Create Model / Criterion / optimizer')
     model = eval('{model}()'.format(model = args.model))
-    f_alpha = torch.tensor([0.0007, 0.0205, 0.0051, 0.0647, 0.0515, 0.0603, 0.016 , 0.0306, 0.004 , 1.0, 0.0869]) # [1.44,44.33,11.04,139.99,111.34,130.32,34.69,66.27,8.56,2162.59,187.92]
-    f_alpha = f_alpha.to(args.device)
+    # f_alpha = torch.tensor([1.44,44.33,11.04,139.99,111.34,130.32,34.69,66.27,8.56,2162.59,187.92])
+    # f_alpha = torch.tensor([0.0007, 0.0205, 0.0051, 0.0647, 0.0515, 0.0603, 0.016 , 0.0306, 0.004 , 1.0, 0.0869])
+    # f_alpha = torch.tensor([0.0054, 0.1682, 0.0419, 0.5313, 0.4225, 0.4946, 0.1317, 0.2515, 0.0325, 8.2072, 0.7132])
+    # f_alpha = f_alpha.to(args.device)
+    f_alpha = 1.
     criterion = FocalLoss(f_alpha, gamma = 2.0, reduction = 'mean')#nn.CrossEntropyLoss()
     optimizer = get_optimizer(model, args=args)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer=optimizer, step_size=args.scheduler_step, gamma = args.scheduler_gamma)
