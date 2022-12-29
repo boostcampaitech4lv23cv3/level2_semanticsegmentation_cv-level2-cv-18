@@ -55,7 +55,7 @@ def parse_args() -> Namespace:
     parser.add_argument('--val_every', type=int, default=1)
     parser.add_argument('--epoch', type=int, default=10)
     parser.add_argument('--lr', type=float, default=1e-4)
-    parser.add_argument('--optimizer', type=str, default='adam')
+    parser.add_argument('--optimizer', type=str, default='adamw')
     parser.add_argument('--weight_decay', type=float, default=1e-4)
     parser.add_argument('--momentum', type=float, default=0.9)
     parser.add_argument('--scheduler_step', type=float, default=10)
@@ -283,7 +283,9 @@ def main(args:Namespace):
 
     print(' * Create Model / Criterion / optimizer')
     model = eval('{model}()'.format(model = args.model))
-    criterion = nn.CrossEntropyLoss()
+    f_alpha = torch.tensor([0.0007, 0.0205, 0.0051, 0.0647, 0.0515, 0.0603, 0.016 , 0.0306, 0.004 , 1.0, 0.0869]) # [1.44,44.33,11.04,139.99,111.34,130.32,34.69,66.27,8.56,2162.59,187.92]
+    f_alpha = f_alpha.to(args.device)
+    criterion = FocalLoss(f_alpha, gamma = 2.0, reduction = 'mean')#nn.CrossEntropyLoss()
     optimizer = get_optimizer(model, args=args)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer=optimizer, step_size=args.scheduler_step, gamma = args.scheduler_gamma)
 
