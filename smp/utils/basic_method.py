@@ -9,10 +9,12 @@ import os
 def collate_fn(batch):
     return tuple(zip(*batch))
 
+
 def load_json(path:str)->dict:
     with open(path) as f:
         deployment_def = json.load(f)
     return deployment_def
+
 
 def fix_seed(seed:int):
     # seed 고정
@@ -25,6 +27,13 @@ def fix_seed(seed:int):
     torch.backends.cudnn.benchmark = False # type: ignore    
     np.random.seed(random_seed)
     random.seed(random_seed)
+    os.environ['PYTHONHASHSEED'] = str(random_seed)
+
+
+def seed_worker(worker_id):
+    worker_seed = torch.initial_seed() % 2**32
+    np.random.seed(worker_seed)
+    random.seed(worker_seed)
 
 
 def label_accuracy_score(hist):
@@ -47,4 +56,3 @@ def label_accuracy_score(hist):
     freq = hist.sum(axis=1) / hist.sum()
     fwavacc = (freq[freq > 0] * iu[freq > 0]).sum()
     return acc, acc_cls, mean_iu, fwavacc, iu
-

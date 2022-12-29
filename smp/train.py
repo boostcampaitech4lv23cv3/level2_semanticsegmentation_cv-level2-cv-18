@@ -14,6 +14,7 @@ from albumentations.pytorch import ToTensorV2
 import torch
 import torch.nn as nn
 from torchvision import models
+from torch.cuda.amp import GradScaler, autocast
 
 from utils import *
 from models import *
@@ -21,11 +22,26 @@ from data_loader import *
 
 import wandb
 
+class_labels = {
+    0: "Background",
+    1: "General trash",
+    2: "Paper",
+    3: "Paper pack",
+    4: "Metal",
+    5: "Glass",
+    6: "Plastic",
+    7: "Styrofoam",
+    8: "Plastic bag",
+    9: "Battery",
+    10: "Clothing",
+}
+
 def parse_args() -> Namespace:
     parser = ArgumentParser()
     parser.add_argument('--wandb_enable', type=bool, default=True)
-    parser.add_argument('--wandb_project', type=str, default='Trash Segmentation')
-    parser.add_argument('--wandb_name', type=str, default='{model}')
+    parser.add_argument('--wandb_name', type=str, default=None)
+    parser.add_argument('--notion_post_enable', type=bool, default=True)
+    parser.add_argument('--notion_post_name', type=str, default='{model}')
     parser.add_argument('--seed', type=int, default=21)
     parser.add_argument('--config_path', type=str, default='./')
     parser.add_argument('--config_file', type=str, default='config.json')
@@ -35,19 +51,26 @@ def parse_args() -> Namespace:
     parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu')
     
     parser.add_argument('--model', type=str, default='FCN_Resnet50')
-    parser.add_argument('--batch_size', type=int, default=16)
+    parser.add_argument('--batch_size', type=int, default=8)
     parser.add_argument('--val_every', type=int, default=1)
-    parser.add_argument('--epoch', type=int, default=20)
+    parser.add_argument('--epoch', type=int, default=10)
     parser.add_argument('--lr', type=float, default=1e-4)
+    parser.add_argument('--optimizer', type=str, default='adamw')
     parser.add_argument('--weight_decay', type=float, default=1e-4)
+    parser.add_argument('--momentum', type=float, default=0.9)
+    parser.add_argument('--scheduler_step', type=float, default=10)
+    parser.add_argument('--scheduler_gamma', type=float, default=0.5)
+    
+    parser.add_argument('--valid_img', type=bool, default=True)
     args = parser.parse_args()
     return args
 
 def init_wandb(args:Namespace):
     if args.wandb_enable :
         wandb.init(
-            project=args.wandb_project, # set the wandb project where this run will be logged
-            name=args.wandb_name.format(model = args.model),
+            entity="light-observer",
+            project="Trash Segmentation",
+            name=args.model if args.wandb_name == None else args.wandb_name,
             config=args.__dict__ # track hyperparameters and run metadata
         )
 
@@ -76,10 +99,25 @@ def validation(epoch:int, model, data_loader:DataLoader, criterion, device:str, 
             total_loss += loss
             cnt += 1
             
+            
             outputs = torch.argmax(outputs, dim=1).detach().cpu().numpy()
             masks = masks.detach().cpu().numpy()
             
             hist = add_hist(hist, masks, outputs, n_class=n_class)
+            if args.valid_img :
+                for i in range(5):
+                    # valid_img_setting
+                    valid_img = images[i, :, :, :].detach().cpu().numpy()
+                    valid_img = np.transpose(valid_img, (1,2,0))
+                
+                
+                    wandb.log({
+                        f'validation_img_{i}': wandb.Image(
+                            valid_img,
+                            masks={"predictions": {"mask_data": outputs[i, :, :], "class_labels": class_labels},
+                                "grund_truth": {"mask_data": masks[i, :, :], "class_labels": class_labels}}   
+                        )
+                    }, commit=False)
         
         acc, acc_cls, mIoU, fwavacc, IoU = label_accuracy_score(hist)
         IoU_by_class = [{classes : round(IoU,4)} for IoU, classes in zip(IoU , global_config['Category'])]
@@ -90,20 +128,20 @@ def validation(epoch:int, model, data_loader:DataLoader, criterion, device:str, 
         # wandb logging
         if args.wandb_enable :
             log = {
-                'val_loss'   :avrg_loss,
-                'val_acc'    :acc,
-                'val_acc_cls':acc_cls,
-                'val_mIoU'   :mIoU,
-                'val_fwavacc':fwavacc,
+                'val/loss'   :avrg_loss,
+                'val/acc'    :acc,
+                'val/acc_cls':acc_cls,
+                'val/mIoU'   :mIoU,
+                'val/fwavacc':fwavacc,
             }
             for kv in IoU_by_class : 
                 key = list(kv.keys())[0]
-                log['val_IoU_{key}'.format(key=key)] = kv[key]
+                log['val/IoU_{key}'.format(key=key)] = kv[key]
             wandb.log(log)
         
-    return avrg_loss
+    return avrg_loss, mIoU
 
-def train(args:Namespace, global_config:dict, model, optimizer, criterion, train_loader, val_loader):
+def train(args:Namespace, global_config:dict, model, optimizer, criterion, scheduler, train_loader, val_loader):
     # get current time
     now = datetime.now()
     time = now.strftime('%Y-%m-%d %H.%M.%S')
@@ -111,9 +149,13 @@ def train(args:Namespace, global_config:dict, model, optimizer, criterion, train
     # get params from args
     n_class = 11
     best_loss = 9999999
+    best_mIoU = 0
     num_epochs = args.epoch
     device = args.device
     val_every = args.val_every
+
+    # Creates a GradScaler once at the beginning of training.
+    scaler = GradScaler()
 
     for epoch in range(num_epochs):
         model.train()
@@ -124,6 +166,8 @@ def train(args:Namespace, global_config:dict, model, optimizer, criterion, train
         train_fwavacc = []
         hist = np.zeros((n_class, n_class))
         for step, (images, masks, _) in enumerate(train_loader):
+            optimizer.zero_grad()
+            
             images = torch.stack(images)       
             masks = torch.stack(masks).long() 
             
@@ -132,15 +176,25 @@ def train(args:Namespace, global_config:dict, model, optimizer, criterion, train
             
             # device 할당
             model = model.to(device)
+            with autocast():
+                # inference
+                outputs = model(images)['out']
+
+                # loss 계산 (cross entropy loss)
+                loss = criterion(outputs, masks)
             
-            # inference
-            outputs = model(images)['out']
+             # Scales loss.  Calls backward() on scaled loss to create scaled gradients.
+            # Backward passes under autocast are not recommended.
+            # Backward ops run in the same dtype autocast chose for corresponding forward ops.
+            scaler.scale(loss).backward() # loss.backward()
             
-            # loss 계산 (cross entropy loss)
-            loss = criterion(outputs, masks)
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
+            # scaler.step() first unscales the gradients of the optimizer's assigned params.
+            # If these gradients do not contain infs or NaNs, optimizer.step() is then called,
+            # otherwise, optimizer.step() is skipped.
+            scaler.step(optimizer) # optimizer.step()
+
+            # Updates the scale for next iteration.
+            scaler.update()
             
             outputs = torch.argmax(outputs, dim=1).detach().cpu().numpy()
             masks = masks.detach().cpu().numpy()
@@ -155,27 +209,43 @@ def train(args:Namespace, global_config:dict, model, optimizer, criterion, train
             train_acc_cls.append(acc_cls)
             train_mIoU.append(mIoU)
             train_fwavacc.append(fwavacc)
-             
+
+        # step schduler
+        scheduler.step()
+
         # wandb logging
         if args.wandb_enable :
             log = {
-                'LR'   : optimizer.param_groups[0]['lr'],
-                'train_loss'   :np.average(np.array(train_loss)),
-                'train_acc'    :np.average(np.array(train_acc)),
-                'train_acc_cls':np.average(np.array(train_acc_cls)),
-                'train_mIoU'   :np.average(np.array(train_mIoU)),
-                'train_fwavacc':np.average(np.array(train_fwavacc)),
+                'train/LR'     : optimizer.param_groups[0]['lr'],
+                'train/loss'   :np.average(np.array(train_loss)),
+                'train/acc'    :np.average(np.array(train_acc)),
+                'train/acc_cls':np.average(np.array(train_acc_cls)),
+                'train/mIoU'   :np.average(np.array(train_mIoU)),
+                'train/fwavacc':np.average(np.array(train_fwavacc)),
             }
             wandb.log(log)
         
         # validation 주기에 따른 loss 출력 및 best model 저장
         if (epoch + 1) % val_every == 0:
-            avrg_loss = validation(epoch + 1, model, val_loader, criterion, device, global_config=global_config)
-            if avrg_loss < best_loss:
+            avrg_loss, val_mIoU = validation(epoch + 1, model, val_loader, criterion, device, global_config=global_config)
+            if best_mIoU < val_mIoU:
                 print(f"Best performance at epoch: {epoch + 1}")
                 best_loss = avrg_loss
+                best_mIoU = val_mIoU
                 save_model(best_loss=best_loss, best_epoch=epoch + 1, args= args, model=model, optimizer=optimizer, criterion=criterion, time=time)
-        
+    
+    # post this result to notion
+    if(args.notion_post_enable):
+        nw = NotionAutoWriter(global_config)
+        post_name = args.notion_post_name.format(time=time, model=args.model)
+        run = wandb.run
+        url = run.get_url()
+        content = json.dumps(args.__dict__, indent=4, sort_keys=True)
+        nw.post_page(title = post_name, remark = '-', 
+                            val_score = round(best_mIoU, 4), test_score = 0.0,
+                            wandb_link = url, contents = [" * Start Time * " , time , " * Test Args * ", content]
+                    )
+
 
 def main(args:Namespace):
     print(' * Fix Seed')    
@@ -201,21 +271,29 @@ def main(args:Namespace):
                                            batch_size=args.batch_size,
                                            shuffle=True,
                                            num_workers=4,
+                                           worker_init_fn=seed_worker,
                                            collate_fn=collate_fn)
 
     val_loader = DataLoader(dataset=val_dataset, 
                                              batch_size=args.batch_size,
                                              shuffle=False,
                                              num_workers=4,
+                                             worker_init_fn=seed_worker,
                                              collate_fn=collate_fn)
 
     print(' * Create Model / Criterion / optimizer')
     model = eval('{model}()'.format(model = args.model))
-    criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(params = model.parameters(), lr = args.lr, weight_decay=args.weight_decay)
+    # f_alpha = torch.tensor([1.44,44.33,11.04,139.99,111.34,130.32,34.69,66.27,8.56,2162.59,187.92])
+    # f_alpha = torch.tensor([0.0007, 0.0205, 0.0051, 0.0647, 0.0515, 0.0603, 0.016 , 0.0306, 0.004 , 1.0, 0.0869])
+    # f_alpha = torch.tensor([0.0054, 0.1682, 0.0419, 0.5313, 0.4225, 0.4946, 0.1317, 0.2515, 0.0325, 8.2072, 0.7132])
+    # f_alpha = f_alpha.to(args.device)
+    f_alpha = 1.
+    criterion = FocalLoss(f_alpha, gamma = 2.0, reduction = 'mean')#nn.CrossEntropyLoss()
+    optimizer = get_optimizer(model, args=args)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer=optimizer, step_size=args.scheduler_step, gamma = args.scheduler_gamma)
 
     print(' * Start Training')
-    train(args, global_config, model=model, optimizer=optimizer, criterion=criterion, train_loader=train_loader, val_loader=val_loader)
+    train(args, global_config, model=model, optimizer=optimizer, criterion=criterion, scheduler=scheduler, train_loader=train_loader, val_loader=val_loader)
 
 
 if __name__ == '__main__':
