@@ -265,10 +265,11 @@ def main(args:Namespace):
 
     print(' * Create Transforms')
     train_transform = A.Compose([
-                                A.SafeRotate(15),
                                 A.RandomResizedCrop(width=512, height=512, scale=(0.5, 1.0)),
                                 A.HorizontalFlip(p=0.5),
-                                # A.ColorJitter(),
+                                A.VerticalFlip(p=0.5),
+                                A.ColorJitter(brightness=0.0, contrast=0.0, saturation=0.0, hue=0.5),
+                                A.GridDropout(),
                                 A.augmentations.transforms.Normalize(),
                                 ToTensorV2()
                                 ])
