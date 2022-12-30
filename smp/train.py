@@ -53,15 +53,15 @@ def parse_args() -> Namespace:
     parser.add_argument('--model', type=str, default='FCN_Resnet50')
     parser.add_argument('--batch_size', type=int, default=8)
     parser.add_argument('--val_every', type=int, default=1)
-    parser.add_argument('--epoch', type=int, default=10)
+    parser.add_argument('--epoch', type=int, default=100)
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--optimizer', type=str, default='adamw')
-    parser.add_argument('--weight_decay', type=float, default=1e-4)
+    parser.add_argument('--weight_decay', type=float, default=1e-6)
     parser.add_argument('--momentum', type=float, default=0.9)
-    parser.add_argument('--scheduler_step', type=float, default=10)
+    parser.add_argument('--scheduler_step', type=float, default=25)
     parser.add_argument('--scheduler_gamma', type=float, default=0.5)
     
-    parser.add_argument('--valid_img', type=bool, default=True)
+    parser.add_argument('--valid_img', type=bool, default=False)
     args = parser.parse_args()
     return args
 
@@ -145,25 +145,28 @@ def train(args:Namespace, global_config:dict, model, optimizer, criterion, sched
     # get current time
     now = datetime.now()
     time = now.strftime('%Y-%m-%d %H.%M.%S')
+    output_path = 'No File'
 
     # get params from args
     n_class = 11
-    best_loss = 9999999
-    best_mIoU = 0
-    num_epochs = args.epoch
     device = args.device
+    num_epochs = args.epoch
+    train_best_loss = 9999999
+    train_best_mIoU = 9999999
     val_every = args.val_every
+    val_best_loss = 9999999
+    val_best_mIoU = 0
 
     # Creates a GradScaler once at the beginning of training.
     scaler = GradScaler()
 
     for epoch in range(num_epochs):
         model.train()
-        train_loss = []
-        train_acc = []
-        train_acc_cls = []
-        train_mIoU = []
-        train_fwavacc = []
+        train_loss_array = []
+        train_acc_array = []
+        train_acc_cls_array = []
+        train_mIoU_array = []
+        train_fwavacc_array = []
         hist = np.zeros((n_class, n_class))
         for step, (images, masks, _) in enumerate(train_loader):
             optimizer.zero_grad()
@@ -204,35 +207,46 @@ def train(args:Namespace, global_config:dict, model, optimizer, criterion, sched
             # step 주기에 따른 loss 출력
             if (step + 1) % 25 == 0:
                 print(f'Epoch [{epoch+1}/{num_epochs}], Step [{step+1}/{len(train_loader)}], Loss: {round(loss.item(),4)}, mIoU: {round(mIoU,4)}')
-            train_loss.append(loss.item())
-            train_acc.append(acc)
-            train_acc_cls.append(acc_cls)
-            train_mIoU.append(mIoU)
-            train_fwavacc.append(fwavacc)
+            train_loss_array.append(loss.item())
+            train_acc_array.append(acc)
+            train_acc_cls_array.append(acc_cls)
+            train_mIoU_array.append(mIoU)
+            train_fwavacc_array.append(fwavacc)
 
         # step schduler
         scheduler.step()
+
+        # Calc train metric
+        train_loss = np.average(np.array(train_loss_array))
+        train_acc = np.average(np.array(train_acc_array))
+        train_acc_cls = np.average(np.array(train_acc_cls_array))
+        train_mIoU = np.average(np.array(train_mIoU_array))
+        train_fwavacc = np.average(np.array(train_fwavacc_array))
+        
+        if train_best_mIoU < train_mIoU:
+            train_best_loss = train_loss
+            train_best_mIoU = train_mIoU
 
         # wandb logging
         if args.wandb_enable :
             log = {
                 'train/LR'     : optimizer.param_groups[0]['lr'],
-                'train/loss'   :np.average(np.array(train_loss)),
-                'train/acc'    :np.average(np.array(train_acc)),
-                'train/acc_cls':np.average(np.array(train_acc_cls)),
-                'train/mIoU'   :np.average(np.array(train_mIoU)),
-                'train/fwavacc':np.average(np.array(train_fwavacc)),
+                'train/loss'   : train_loss,
+                'train/acc'    : train_acc,
+                'train/acc_cls': train_acc_cls,
+                'train/mIoU'   : train_mIoU,
+                'train/fwavacc': train_fwavacc,
             }
             wandb.log(log)
-        
+
         # validation 주기에 따른 loss 출력 및 best model 저장
         if (epoch + 1) % val_every == 0:
-            avrg_loss, val_mIoU = validation(epoch + 1, model, val_loader, criterion, device, global_config=global_config)
-            if best_mIoU < val_mIoU:
+            val_loss, val_mIoU = validation(epoch + 1, model, val_loader, criterion, device, global_config=global_config)
+            if val_best_mIoU < val_mIoU:
                 print(f"Best performance at epoch: {epoch + 1}")
-                best_loss = avrg_loss
-                best_mIoU = val_mIoU
-                save_model(best_loss=best_loss, best_epoch=epoch + 1, args= args, model=model, optimizer=optimizer, criterion=criterion, time=time)
+                val_best_loss = val_loss
+                val_best_mIoU = val_mIoU
+                output_path = save_model(best_loss=val_best_loss, best_epoch=epoch + 1, args= args, model=model, optimizer=optimizer, criterion=criterion, time=time)
     
     # post this result to notion
     if(args.notion_post_enable):
@@ -242,8 +256,19 @@ def train(args:Namespace, global_config:dict, model, optimizer, criterion, sched
         url = run.get_url()
         content = json.dumps(args.__dict__, indent=4, sort_keys=True)
         nw.post_page(title = post_name, remark = '-', 
-                            val_score = round(best_mIoU, 4), test_score = 0.0,
-                            wandb_link = url, contents = [" * Start Time * " , time , " * Test Args * ", content]
+                            val_score = round(val_best_mIoU, 4), test_score = 0.0,
+                            wandb_link = url, contents = [
+                                " * Best Train Score * " , 
+                                train_best_mIoU , 
+                                " * Best Val Score * " , 
+                                val_best_mIoU , 
+                                " * Start Time * " , 
+                                time , 
+                                " * File Path * ",
+                                output_path,
+                                " * Args * ", 
+                                content,
+                                ]
                     )
 
 
@@ -256,11 +281,17 @@ def main(args:Namespace):
 
     print(' * Create Transforms')
     train_transform = A.Compose([
-                            ToTensorV2()
-                            ])
+                                A.SafeRotate(15),
+                                A.RandomResizedCrop(width=512, height=512, scale=(0.5, 1.0)),
+                                A.HorizontalFlip(p=0.5),
+                                # A.ColorJitter(),
+                                A.augmentations.transforms.Normalize(),
+                                ToTensorV2()
+                                ])
     val_transform = A.Compose([
-                              ToTensorV2()
-                              ])
+                                A.augmentations.transforms.Normalize(),
+                                ToTensorV2()
+                                ])
                               
     print(' * Create Datasets')
     train_dataset = BaseDataset(dataset_path=args.data_path, mode='train', transform=train_transform, global_config = global_config)
@@ -292,11 +323,13 @@ def main(args:Namespace):
     optimizer = get_optimizer(model, args=args)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer=optimizer, step_size=args.scheduler_step, gamma = args.scheduler_gamma)
 
+    print(' * init wandb')
+    init_wandb(args=args)
+
     print(' * Start Training')
     train(args, global_config, model=model, optimizer=optimizer, criterion=criterion, scheduler=scheduler, train_loader=train_loader, val_loader=val_loader)
 
 
 if __name__ == '__main__':
     args = parse_args()
-    init_wandb(args=args)
     main(args)
