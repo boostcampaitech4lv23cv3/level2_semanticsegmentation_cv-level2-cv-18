@@ -104,12 +104,11 @@ def validation(epoch:int, model, data_loader:DataLoader, criterion, device:str, 
             masks = masks.detach().cpu().numpy()
             
             hist = add_hist(hist, masks, outputs, n_class=n_class)
-            if args.valid_img :
+            if args.valid_img == True :
                 for i in range(5):
                     # valid_img_setting
                     valid_img = images[i, :, :, :].detach().cpu().numpy()
                     valid_img = np.transpose(valid_img, (1,2,0))
-                
                 
                     wandb.log({
                         f'validation_img_{i}': wandb.Image(
@@ -141,7 +140,7 @@ def validation(epoch:int, model, data_loader:DataLoader, criterion, device:str, 
         
     return avrg_loss, mIoU
 
-def train(args:Namespace, global_config:dict, model, optimizer, criterion, scheduler, train_loader, val_loader):
+def train(args:Namespace, global_config:dict, model, optimizer, criterion, scheduler, train_loader:DataLoader, val_loader:DataLoader):
     # get current time
     now = datetime.now()
     time = now.strftime('%Y-%m-%d %H.%M.%S')
@@ -168,50 +167,33 @@ def train(args:Namespace, global_config:dict, model, optimizer, criterion, sched
         train_mIoU_array = []
         train_fwavacc_array = []
         hist = np.zeros((n_class, n_class))
-        for step, (images, masks, _) in enumerate(train_loader):
-            optimizer.zero_grad()
-            
-            images = torch.stack(images)       
-            masks = torch.stack(masks).long() 
-            
-            # gpu 연산을 위해 device 할당
-            images, masks = images.to(device), masks.to(device)
-            
-            # device 할당
-            model = model.to(device)
-            with autocast():
-                # inference
-                outputs = model(images)['out']
+        with tqdm(total=len(train_loader)) as pbar:
+            for step, (images, masks, _) in enumerate(train_loader):
+                optimizer.zero_grad()
+                images = torch.stack(images)       
+                masks = torch.stack(masks).long() 
+                images, masks = images.to(device), masks.to(device) # gpu 연산을 위해 device 할당
+                model = model.to(device) # device 할당
+                with autocast():
+                    # inference
+                    outputs = model(images)['out']
+                    # loss 계산 (cross entropy loss)
+                    loss = criterion(outputs, masks)
 
-                # loss 계산 (cross entropy loss)
-                loss = criterion(outputs, masks)
-            
-             # Scales loss.  Calls backward() on scaled loss to create scaled gradients.
-            # Backward passes under autocast are not recommended.
-            # Backward ops run in the same dtype autocast chose for corresponding forward ops.
-            scaler.scale(loss).backward() # loss.backward()
-            
-            # scaler.step() first unscales the gradients of the optimizer's assigned params.
-            # If these gradients do not contain infs or NaNs, optimizer.step() is then called,
-            # otherwise, optimizer.step() is skipped.
-            scaler.step(optimizer) # optimizer.step()
+                scaler.scale(loss).backward() # loss.backward()
+                scaler.step(optimizer) # optimizer.step()
+                scaler.update() # Updates the scale for next iteration.
+                outputs = torch.argmax(outputs, dim=1).detach().cpu().numpy()
+                masks = masks.detach().cpu().numpy()
+                hist = add_hist(hist, masks, outputs, n_class=n_class)
+                acc, acc_cls, mIoU, fwavacc, IoU = label_accuracy_score(hist)
 
-            # Updates the scale for next iteration.
-            scaler.update()
-            
-            outputs = torch.argmax(outputs, dim=1).detach().cpu().numpy()
-            masks = masks.detach().cpu().numpy()
-            
-            hist = add_hist(hist, masks, outputs, n_class=n_class)
-            acc, acc_cls, mIoU, fwavacc, IoU = label_accuracy_score(hist)
-            # step 주기에 따른 loss 출력
-            if (step + 1) % 25 == 0:
-                print(f'Epoch [{epoch+1}/{num_epochs}], Step [{step+1}/{len(train_loader)}], Loss: {round(loss.item(),4)}, mIoU: {round(mIoU,4)}')
-            train_loss_array.append(loss.item())
-            train_acc_array.append(acc)
-            train_acc_cls_array.append(acc_cls)
-            train_mIoU_array.append(mIoU)
-            train_fwavacc_array.append(fwavacc)
+                train_loss_array.append(loss.item())
+                train_acc_array.append(acc)
+                train_acc_cls_array.append(acc_cls)
+                train_mIoU_array.append(mIoU)
+                train_fwavacc_array.append(fwavacc)
+                pbar.update(1)
 
         # step schduler
         scheduler.step()
@@ -223,6 +205,8 @@ def train(args:Namespace, global_config:dict, model, optimizer, criterion, sched
         train_mIoU = np.average(np.array(train_mIoU_array))
         train_fwavacc = np.average(np.array(train_fwavacc_array))
         
+        # Print train metric
+        print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {round(train_loss.item(),4)}, mIoU: {round(train_mIoU,4)}')
         if train_best_mIoU < train_mIoU:
             train_best_loss = train_loss
             train_best_mIoU = train_mIoU
@@ -259,9 +243,9 @@ def train(args:Namespace, global_config:dict, model, optimizer, criterion, sched
                             val_score = round(val_best_mIoU, 4), test_score = 0.0,
                             wandb_link = url, contents = [
                                 " * Best Train Score * " , 
-                                train_best_mIoU , 
+                                str(train_best_mIoU) , 
                                 " * Best Val Score * " , 
-                                val_best_mIoU , 
+                                str(val_best_mIoU) , 
                                 " * Start Time * " , 
                                 time , 
                                 " * File Path * ",
