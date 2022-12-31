@@ -269,7 +269,6 @@ def main(args:Namespace):
                                 A.HorizontalFlip(p=0.5),
                                 A.VerticalFlip(p=0.5),
                                 A.ColorJitter(brightness=0.0, contrast=0.0, saturation=0.0, hue=0.5),
-                                A.GridDropout(),
                                 A.augmentations.transforms.Normalize(),
                                 ToTensorV2()
                                 ])
