@@ -14,6 +14,7 @@ from albumentations.pytorch import ToTensorV2
 import torch
 import torch.nn as nn
 from torchvision import models
+from torch.cuda.amp import GradScaler, autocast
 
 from utils import *
 from models import *
@@ -56,7 +57,9 @@ def parse_args() -> Namespace:
     parser.add_argument('--val_every', type=int, default=1)
     parser.add_argument('--epoch', type=int, default=10)
     parser.add_argument('--lr', type=float, default=1e-4)
+    parser.add_argument('--optimizer', type=str, default='adamw')
     parser.add_argument('--weight_decay', type=float, default=1e-4)
+    parser.add_argument('--momentum', type=float, default=0.9)
     parser.add_argument('--scheduler_step', type=float, default=10)
     parser.add_argument('--scheduler_gamma', type=float, default=0.5)
     
@@ -145,6 +148,9 @@ def train(args:Namespace, global_config:dict, model, optimizer, criterion, sched
     device = args.device
     val_every = args.val_every
 
+    # Creates a GradScaler once at the beginning of training.
+    scaler = GradScaler()
+
     for epoch in range(num_epochs):
         model.train()
         train_loss = []
@@ -154,6 +160,8 @@ def train(args:Namespace, global_config:dict, model, optimizer, criterion, sched
         train_fwavacc = []
         hist = np.zeros((n_class, n_class))
         for step, (images, masks, _) in enumerate(train_loader):
+            optimizer.zero_grad()
+            
             images = torch.stack(images)       
             masks = torch.stack(masks).long() 
             
@@ -162,15 +170,25 @@ def train(args:Namespace, global_config:dict, model, optimizer, criterion, sched
             
             # device 할당
             model = model.to(device)
+            with autocast():
+                # inference
+                outputs = model(images)['out']
+
+                # loss 계산 (cross entropy loss)
+                loss = criterion(outputs, masks)
             
-            # inference
-            outputs = model(images)['out']
+             # Scales loss.  Calls backward() on scaled loss to create scaled gradients.
+            # Backward passes under autocast are not recommended.
+            # Backward ops run in the same dtype autocast chose for corresponding forward ops.
+            scaler.scale(loss).backward() # loss.backward()
             
-            # loss 계산 (cross entropy loss)
-            loss = criterion(outputs, masks)
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
+            # scaler.step() first unscales the gradients of the optimizer's assigned params.
+            # If these gradients do not contain infs or NaNs, optimizer.step() is then called,
+            # otherwise, optimizer.step() is skipped.
+            scaler.step(optimizer) # optimizer.step()
+
+            # Updates the scale for next iteration.
+            scaler.update()
             
             outputs = torch.argmax(outputs, dim=1).detach().cpu().numpy()
             masks = masks.detach().cpu().numpy()
@@ -266,8 +284,13 @@ def main(args:Namespace):
         
     print(' * Create Model / Criterion / optimizer')
     model = eval('{model}()'.format(model = args.model))
-    criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(params = model.parameters(), lr = args.lr, weight_decay=args.weight_decay)
+    # f_alpha = torch.tensor([1.44,44.33,11.04,139.99,111.34,130.32,34.69,66.27,8.56,2162.59,187.92])
+    # f_alpha = torch.tensor([0.0007, 0.0205, 0.0051, 0.0647, 0.0515, 0.0603, 0.016 , 0.0306, 0.004 , 1.0, 0.0869])
+    # f_alpha = torch.tensor([0.0054, 0.1682, 0.0419, 0.5313, 0.4225, 0.4946, 0.1317, 0.2515, 0.0325, 8.2072, 0.7132])
+    # f_alpha = f_alpha.to(args.device)
+    f_alpha = 1.
+    criterion = FocalLoss(f_alpha, gamma = 2.0, reduction = 'mean')#nn.CrossEntropyLoss()
+    optimizer = get_optimizer(model, args=args)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer=optimizer, step_size=args.scheduler_step, gamma = args.scheduler_gamma)
 
     print(' * Start Training')
