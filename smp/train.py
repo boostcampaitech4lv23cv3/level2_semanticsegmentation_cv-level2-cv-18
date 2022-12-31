@@ -51,6 +51,7 @@ def parse_args() -> Namespace:
     parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu')
     
     parser.add_argument('--model', type=str, default='FCN_Resnet50')
+    parser.add_argument('--input_size', type=int, default=512)
     parser.add_argument('--batch_size', type=int, default=8)
     parser.add_argument('--val_every', type=int, default=1)
     parser.add_argument('--epoch', type=int, default=100)
@@ -267,7 +268,7 @@ def main(args:Namespace):
 
     print(' * Create Transforms')
     train_transform = A.Compose([
-                                A.RandomResizedCrop(width=512, height=512, scale=(0.5, 1.0)),
+                                A.RandomResizedCrop(width=args.input_size, height=args.input_size, scale=(0.5, 1.0)),
                                 A.HorizontalFlip(p=0.5),
                                 A.VerticalFlip(p=0.5),
                                 A.ColorJitter(brightness=0.0, contrast=0.0, saturation=0.0, hue=0.5),
@@ -275,6 +276,7 @@ def main(args:Namespace):
                                 ToTensorV2()
                                 ])
     val_transform = A.Compose([
+                                A.Resize(args.input_size,args.input_size),
                                 A.augmentations.transforms.Normalize(),
                                 ToTensorV2()
                                 ])
