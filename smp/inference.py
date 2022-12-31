@@ -104,7 +104,8 @@ def main(args:Namespace):
 
     print(' * Create Transforms')
     test_transform = A.Compose([
-                               ToTensorV2()
+                                A.augmentations.transforms.Normalize(),
+                                ToTensorV2()
                                ])
 
     print(' * Create Datasets')
