@@ -60,6 +60,7 @@ def parse_args() -> Namespace:
     parser.add_argument('--momentum', type=float, default=0.9)
     parser.add_argument('--scheduler_step', type=float, default=25)
     parser.add_argument('--scheduler_gamma', type=float, default=0.5)
+    parser.add_argument('--ls', type=float, default=0.0)
     
     parser.add_argument('--valid_img', type=bool, default=False)
     args = parser.parse_args()
@@ -303,7 +304,7 @@ def main(args:Namespace):
     # f_alpha = torch.tensor([0.0054, 0.1682, 0.0419, 0.5313, 0.4225, 0.4946, 0.1317, 0.2515, 0.0325, 8.2072, 0.7132])
     # f_alpha = f_alpha.to(args.device)
     f_alpha = 1.
-    criterion = FocalLoss(f_alpha, gamma = 2.0, reduction = 'mean')#nn.CrossEntropyLoss()
+    criterion = FocalLoss(f_alpha, gamma = 2.0, reduction = 'mean', ls=args.ls)#nn.CrossEntropyLoss()
     optimizer = get_optimizer(model, args=args)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer=optimizer, step_size=args.scheduler_step, gamma = args.scheduler_gamma)
 
