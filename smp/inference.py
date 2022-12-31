@@ -34,6 +34,7 @@ def parse_args() -> Namespace:
     
     parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu')
     parser.add_argument('--batch_size', type=int, default=16)
+    parser.add_argument('--input_size', type=int, default=512)
     args = parser.parse_args()
     return args
 
@@ -104,6 +105,7 @@ def main(args:Namespace):
 
     print(' * Create Transforms')
     test_transform = A.Compose([
+                                A.Resize(args.input_size,args.input_size),
                                 A.augmentations.transforms.Normalize(),
                                 ToTensorV2()
                                ])
