@@ -105,11 +105,11 @@ class TimmEfficientb3_FPN(torch.nn.Module):
             'out' : x
         }
 
-class TimmEfficientb3_FPN(torch.nn.Module):
+class TimmEfficientb4_FPN(torch.nn.Module):
     def __init__(self) -> None:
         super().__init__()
         self.segbackbone = smp.FPN(
-                                    encoder_name="timm-efficientnet-b3", # choose encoder, e.g. mobilenet_v2 or efficientnet-b7
+                                    encoder_name="timm-efficientnet-b4", # choose encoder, e.g. mobilenet_v2 or efficientnet-b7
                                     encoder_weights="imagenet",     # use `imagenet` pre-trained weights for encoder initialization
                                     in_channels=3,                  # model input channels (1 for gray-scale images, 3 for RGB, etc.)
                                     classes=11,                     # model output channels (number of classes in your dataset)
