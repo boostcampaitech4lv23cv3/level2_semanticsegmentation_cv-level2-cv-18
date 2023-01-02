@@ -1,8 +1,37 @@
+from argparse import Namespace
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
+import segmentation_models_pytorch as smp
 from typing import Optional
+
+def get_loss(args:Namespace) -> nn.Module:
+    loss = nn.CrossEntropyLoss()
+    if args.loss == 'focal':
+        if args.fl_alpha == 'basic':
+            f_alpha = torch.tensor([1.44,44.33,11.04,139.99,111.34,130.32,34.69,66.27,8.56,2162.59,187.92]).to(args.device)
+        elif args.fl_alpha == 'max':
+            f_alpha = torch.tensor([0.0007, 0.0205, 0.0051, 0.0647, 0.0515, 0.0603, 0.016 , 0.0306, 0.004 , 1.0, 0.0869]).to(args.device)
+        elif args.fl_alpha == 'avg':
+            f_alpha = torch.tensor([0.0054, 0.1682, 0.0419, 0.5313, 0.4225, 0.4946, 0.1317, 0.2515, 0.0325, 8.2072, 0.7132]).to(args.device)
+        elif args.fl_alpha == 'miou':
+            # f_alpha = torch.tensor([0.1, 0.6, 0.3, 0.6, 0.5, 0.5, 0.6, 0.3, 0.2, 0.4, 0.5]).to(args.device)
+            f_alpha = torch.tensor([0.2, 1.2, 0.6, 1.2, 1.2, 1.0, 1.2, 0.6, 0.4, 2.0, 1.4]).to(args.device)
+        else:
+            f_alpha = float(args.fl_alpha)
+        loss = FocalLoss(f_alpha, gamma = 2.0, reduction = 'mean', ls=args.ls)
+    elif args.loss == 'dice':
+        loss = smp.losses.DiceLoss(mode='multiclass')
+    elif args.loss == 'jaccard':
+        loss = smp.losses.JaccardLoss(mode='multiclass')
+    elif args.loss == 'cross_entropy':
+        loss = loss
+    else:
+        print(args.loss, ' is not supported option.')
+    print(' * loss : ', loss.__class__.__name__)
+    return loss
+
 
 def label_to_one_hot_label(
     labels: torch.Tensor,
@@ -12,34 +41,6 @@ def label_to_one_hot_label(
     eps: float = 1e-6,
     ignore_index=255,
 ) -> torch.Tensor:
-    r"""Convert an integer label x-D tensor to a one-hot (x+1)-D tensor.
-
-    Args:
-        labels: tensor with labels of shape :math:`(N, *)`, where N is batch size.
-          Each value is an integer representing correct classification.
-        num_classes: number of classes in labels.
-        device: the desired device of returned tensor.
-        dtype: the desired data type of returned tensor.
-
-    Returns:
-        the labels in one hot tensor of shape :math:`(N, C, *)`,
-
-    Examples:
-        >>> labels = torch.LongTensor([
-                [[0, 1], 
-                [2, 0]]
-            ])
-        >>> one_hot(labels, num_classes=3)
-        tensor([[[[1.0000e+00, 1.0000e-06],
-                  [1.0000e-06, 1.0000e+00]],
-        
-                 [[1.0000e-06, 1.0000e+00],
-                  [1.0000e-06, 1.0000e-06]],
-        
-                 [[1.0000e-06, 1.0000e-06],
-                  [1.0000e+00, 1.0000e-06]]]])
-
-    """
     shape = labels.shape
     # one hot : (B, C=ignore_index+1, H, W)
     one_hot = torch.zeros((shape[0], ignore_index+1) + shape[1:], device=device, dtype=dtype)
