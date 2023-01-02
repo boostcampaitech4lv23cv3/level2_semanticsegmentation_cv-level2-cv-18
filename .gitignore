@@ -192,4 +192,5 @@ results/
 
 # mmseg
 mmsegmentation/
-mmseg/tools/work_dirs/
+work_dirs/
+artifacts/
