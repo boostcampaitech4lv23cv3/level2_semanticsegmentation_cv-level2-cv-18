@@ -1,18 +1,15 @@
 # yapf:disable
 log_config = dict(
-    interval=2000,
+    interval=10,
     hooks=[
         dict(type='TextLoggerHook', by_epoch=False),
         dict(type='MMSegWandbHook',
                      init_kwargs={
                          'entity': "light-observer",
                          'project': "Trash_MMseg",
-                         "name": "uperner_swin_tiny"
-                     })
-                    #  interval=2000,
-                    #  log_checkpoint=True,
-                    #  log_checkpoint_metadata=True,
-                    #  num_eval_images=0)
+                         "name": "uperner_swin_large_diceloss"
+                     },
+                    num_eval_images=0)
         # dict(type='TensorboardLoggerHook')
         # dict(type='PaviLoggerHook') # for internal services
     ])
