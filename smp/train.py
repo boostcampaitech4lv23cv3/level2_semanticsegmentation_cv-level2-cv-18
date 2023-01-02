@@ -22,6 +22,9 @@ from data_loader import *
 
 import wandb
 
+import os
+os.environ['KMP_DUPLICATE_LIB_OK']='True'
+
 class_labels = {
     0: "Background",
     1: "General trash",
@@ -39,7 +42,7 @@ class_labels = {
 def parse_args() -> Namespace:
     parser = ArgumentParser()
     parser.add_argument('--wandb_enable', type=bool, default=True)
-    parser.add_argument('--wandb_name', type=str, default=None)
+    parser.add_argument('--wandb_name', type=str, default='TEST')
     parser.add_argument('--notion_post_enable', type=bool, default=True)
     parser.add_argument('--notion_post_name', type=str, default='{model}')
     parser.add_argument('--seed', type=int, default=21)
@@ -48,13 +51,13 @@ def parse_args() -> Namespace:
     parser.add_argument('--data_path', type=str, default='../../input/data')
     parser.add_argument('--save_path', type=str, default='../.local/checkpoints')
     parser.add_argument('--save_name', type=str, default='{model}/{time}_best.tar')
-    parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu')
+    parser.add_argument('--device', type=str, default='cuda:0' if torch.cuda.is_available() else 'cpu')
     
     parser.add_argument('--model', type=str, default='FCN_Resnet50')
     parser.add_argument('--input_size', type=int, default=512)
     parser.add_argument('--batch_size', type=int, default=8)
     parser.add_argument('--val_every', type=int, default=1)
-    parser.add_argument('--epoch', type=int, default=100)
+    parser.add_argument('--epoch', type=int, default=5)
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--optimizer', type=str, default='adamw')
     parser.add_argument('--weight_decay', type=float, default=1e-6)
