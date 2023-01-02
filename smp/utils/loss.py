@@ -7,7 +7,7 @@ import segmentation_models_pytorch as smp
 from typing import Optional
 
 def get_loss(args:Namespace) -> nn.Module:
-    loss = nn.CrossEntropyLoss()
+    loss = nn.CrossEntropyLoss(label_smoothing=args.ls)
     if args.loss == 'focal':
         if args.fl_alpha == 'basic':
             f_alpha = torch.tensor([1.44,44.33,11.04,139.99,111.34,130.32,34.69,66.27,8.56,2162.59,187.92]).to(args.device)
@@ -16,15 +16,14 @@ def get_loss(args:Namespace) -> nn.Module:
         elif args.fl_alpha == 'avg':
             f_alpha = torch.tensor([0.0054, 0.1682, 0.0419, 0.5313, 0.4225, 0.4946, 0.1317, 0.2515, 0.0325, 8.2072, 0.7132]).to(args.device)
         elif args.fl_alpha == 'miou':
-            # f_alpha = torch.tensor([0.1, 0.6, 0.3, 0.6, 0.5, 0.5, 0.6, 0.3, 0.2, 0.4, 0.5]).to(args.device)
             f_alpha = torch.tensor([0.2, 1.2, 0.6, 1.2, 1.2, 1.0, 1.2, 0.6, 0.4, 2.0, 1.4]).to(args.device)
         else:
             f_alpha = float(args.fl_alpha)
         loss = FocalLoss(f_alpha, gamma = 2.0, reduction = 'mean', ls=args.ls)
     elif args.loss == 'dice':
-        loss = smp.losses.DiceLoss(mode='multiclass')
+        loss = smp.losses.DiceLoss(mode='multiclass', smooth=args.ls)
     elif args.loss == 'jaccard':
-        loss = smp.losses.JaccardLoss(mode='multiclass')
+        loss = smp.losses.JaccardLoss(mode='multiclass', smooth=args.ls)
     elif args.loss == 'cross_entropy':
         loss = loss
     else:
