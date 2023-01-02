@@ -54,15 +54,18 @@ def parse_args() -> Namespace:
     parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu')
     
     parser.add_argument('--model', type=str, default='FCN_Resnet50')
+    parser.add_argument('--input_size', type=int, default=512)
     parser.add_argument('--batch_size', type=int, default=8)
     parser.add_argument('--val_every', type=int, default=1)
     parser.add_argument('--epoch', type=int, default=1)
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--optimizer', type=str, default='adamw')
-    parser.add_argument('--weight_decay', type=float, default=1e-4)
+    parser.add_argument('--weight_decay', type=float, default=1e-6)
     parser.add_argument('--momentum', type=float, default=0.9)
     parser.add_argument('--scheduler_step', type=float, default=2)
     parser.add_argument('--scheduler_gamma', type=float, default=0.5)
+    parser.add_argument('--ls', type=float, default=0.0)
+    parser.add_argument('--fl_alpha', type=str, default='1.0')
     
     parser.add_argument('--valid_img', type=bool, default=True)
     parser.add_argument('--sweep', type=bool, default=False)
@@ -99,12 +102,11 @@ def validation(epoch:int, model, data_loader:DataLoader, criterion, device:str, 
             masks = masks.detach().cpu().numpy()
             
             hist = add_hist(hist, masks, outputs, n_class=n_class)
-            if args.valid_img :
+            if args.valid_img == True :
                 for i in range(5):
                     # valid_img_setting
                     valid_img = images[i, :, :, :].detach().cpu().numpy()
                     valid_img = np.transpose(valid_img, (1,2,0))
-                
                 
                     wandb.log({
                         f'validation_img_{i}': wandb.Image(
@@ -136,98 +138,97 @@ def validation(epoch:int, model, data_loader:DataLoader, criterion, device:str, 
         
     return avrg_loss, mIoU
 
-def train(args:Namespace, global_config:dict, model, optimizer, criterion, scheduler, train_loader, val_loader):
+def train(args:Namespace, global_config:dict, model, optimizer, criterion, scheduler, train_loader:DataLoader, val_loader:DataLoader):
     # get current time
     now = datetime.now()
     time = now.strftime('%Y-%m-%d %H.%M.%S')
+    output_path = 'No File'
 
     # get params from args
     n_class = 11
-    best_loss = 9999999
-    best_mIoU = 0
-    num_epochs = args.epoch
     device = args.device
+    num_epochs = args.epoch
+    train_best_loss = 9999999
+    train_best_mIoU = 9999999
     val_every = args.val_every
+    val_best_loss = 9999999
+    val_best_mIoU = 0
 
     # Creates a GradScaler once at the beginning of training.
     scaler = GradScaler()
 
     for epoch in range(num_epochs):
         model.train()
-        train_loss = []
-        train_acc = []
-        train_acc_cls = []
-        train_mIoU = []
-        train_fwavacc = []
+        train_loss_array = []
+        train_acc_array = []
+        train_acc_cls_array = []
+        train_mIoU_array = []
+        train_fwavacc_array = []
         hist = np.zeros((n_class, n_class))
-        for step, (images, masks, _) in enumerate(train_loader):
-            optimizer.zero_grad()
-            
-            images = torch.stack(images)       
-            masks = torch.stack(masks).long() 
-            
-            # gpu 연산을 위해 device 할당
-            images, masks = images.to(device), masks.to(device)
-            
-            # device 할당
-            model = model.to(device)
-            with autocast():
-                # inference
-                outputs = model(images)['out']
+        with tqdm(total=len(train_loader)) as pbar:
+            for step, (images, masks, _) in enumerate(train_loader):
+                optimizer.zero_grad()
+                images = torch.stack(images)       
+                masks = torch.stack(masks).long() 
+                images, masks = images.to(device), masks.to(device) # gpu 연산을 위해 device 할당
+                model = model.to(device) # device 할당
+                with autocast():
+                    # inference
+                    outputs = model(images)['out']
+                    # loss 계산 (cross entropy loss)
+                    loss = criterion(outputs, masks)
 
-                # loss 계산 (cross entropy loss)
-                loss = criterion(outputs, masks)
-            
-             # Scales loss.  Calls backward() on scaled loss to create scaled gradients.
-            # Backward passes under autocast are not recommended.
-            # Backward ops run in the same dtype autocast chose for corresponding forward ops.
-            scaler.scale(loss).backward() # loss.backward()
-            
-            # scaler.step() first unscales the gradients of the optimizer's assigned params.
-            # If these gradients do not contain infs or NaNs, optimizer.step() is then called,
-            # otherwise, optimizer.step() is skipped.
-            scaler.step(optimizer) # optimizer.step()
+                scaler.scale(loss).backward() # loss.backward()
+                scaler.step(optimizer) # optimizer.step()
+                scaler.update() # Updates the scale for next iteration.
+                outputs = torch.argmax(outputs, dim=1).detach().cpu().numpy()
+                masks = masks.detach().cpu().numpy()
+                hist = add_hist(hist, masks, outputs, n_class=n_class)
+                acc, acc_cls, mIoU, fwavacc, IoU = label_accuracy_score(hist)
 
-            # Updates the scale for next iteration.
-            scaler.update()
-            
-            outputs = torch.argmax(outputs, dim=1).detach().cpu().numpy()
-            masks = masks.detach().cpu().numpy()
-            
-            hist = add_hist(hist, masks, outputs, n_class=n_class)
-            acc, acc_cls, mIoU, fwavacc, IoU = label_accuracy_score(hist)
-            # step 주기에 따른 loss 출력
-            if (step + 1) % 25 == 0:
-                print(f'Epoch [{epoch+1}/{num_epochs}], Step [{step+1}/{len(train_loader)}], Loss: {round(loss.item(),4)}, mIoU: {round(mIoU,4)}')
-            train_loss.append(loss.item())
-            train_acc.append(acc)
-            train_acc_cls.append(acc_cls)
-            train_mIoU.append(mIoU)
-            train_fwavacc.append(fwavacc)
+                train_loss_array.append(loss.item())
+                train_acc_array.append(acc)
+                train_acc_cls_array.append(acc_cls)
+                train_mIoU_array.append(mIoU)
+                train_fwavacc_array.append(fwavacc)
+                pbar.update(1)
 
         # step schduler
         scheduler.step()
+
+        # Calc train metric
+        train_loss = np.average(np.array(train_loss_array))
+        train_acc = np.average(np.array(train_acc_array))
+        train_acc_cls = np.average(np.array(train_acc_cls_array))
+        train_mIoU = np.average(np.array(train_mIoU_array))
+        train_fwavacc = np.average(np.array(train_fwavacc_array))
+        
+        # Print train metric
+        print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {round(train_loss.item(),4)}, mIoU: {round(train_mIoU,4)}')
+        if train_best_mIoU < train_mIoU:
+            train_best_loss = train_loss
+            train_best_mIoU = train_mIoU
 
         # wandb logging
         if args.wandb_enable :
             log = {
                 'train/LR'     : optimizer.param_groups[0]['lr'],
-                'train/loss'   :np.average(np.array(train_loss)),
-                'train/acc'    :np.average(np.array(train_acc)),
-                'train/acc_cls':np.average(np.array(train_acc_cls)),
-                'train/mIoU'   :np.average(np.array(train_mIoU)),
-                'train/fwavacc':np.average(np.array(train_fwavacc)),
+                'train/loss'   : train_loss,
+                'train/acc'    : train_acc,
+                'train/acc_cls': train_acc_cls,
+                'train/mIoU'   : train_mIoU,
+                'train/fwavacc': train_fwavacc,
             }
             wandb.log(log)
-        
+
         # validation 주기에 따른 loss 출력 및 best model 저장
         if (epoch + 1) % val_every == 0:
-            avrg_loss, val_mIoU = validation(epoch + 1, model, val_loader, criterion, device, global_config=global_config)
-            if best_mIoU < val_mIoU:
+            val_loss, val_mIoU = validation(epoch + 1, model, val_loader, criterion, device, global_config=global_config)
+            if val_best_mIoU < val_mIoU:
                 print(f"Best performance at epoch: {epoch + 1}")
-                best_loss = avrg_loss
-                best_mIoU = val_mIoU
-                save_model(best_loss=best_loss, best_epoch=epoch + 1, args= args, model=model, optimizer=optimizer, criterion=criterion, time=time)
+                val_best_loss = val_loss
+                val_best_mIoU = val_mIoU
+                output_path = save_model(best_loss=val_best_loss, best_epoch=epoch + 1, args= args, model=model, optimizer=optimizer, criterion=criterion, time=time)
     
     # post this result to notion
     if(args.notion_post_enable):
@@ -237,8 +238,19 @@ def train(args:Namespace, global_config:dict, model, optimizer, criterion, sched
         url = run.get_url()
         content = json.dumps(args.__dict__, indent=4, sort_keys=True)
         nw.post_page(title = post_name, remark = '-', 
-                            val_score = round(best_mIoU, 4), test_score = 0.0,
-                            wandb_link = url, contents = [" * Start Time * " , time , " * Test Args * ", content]
+                            val_score = round(val_best_mIoU, 4), test_score = 0.0,
+                            wandb_link = url, contents = [
+                                " * Best Train Score * " , 
+                                str(train_best_mIoU) , 
+                                " * Best Val Score * " , 
+                                str(val_best_mIoU) , 
+                                " * Start Time * " , 
+                                time , 
+                                " * File Path * ",
+                                output_path,
+                                " * Args * ", 
+                                content,
+                                ]
                     )
 
 
@@ -259,11 +271,18 @@ def main(args:Namespace):
 
     print(' * Create Transforms')
     train_transform = A.Compose([
-                            ToTensorV2()
-                            ])
+                                A.RandomResizedCrop(width=args.input_size, height=args.input_size, scale=(0.5, 1.0)),
+                                A.HorizontalFlip(p=0.5),
+                                A.VerticalFlip(p=0.5),
+                                A.ColorJitter(brightness=0.0, contrast=0.0, saturation=0.0, hue=0.5),
+                                A.augmentations.transforms.Normalize(),
+                                ToTensorV2()
+                                ])
     val_transform = A.Compose([
-                              ToTensorV2()
-                              ])
+                                A.Resize(args.input_size,args.input_size),
+                                A.augmentations.transforms.Normalize(),
+                                ToTensorV2()
+                                ])
                               
     print(' * Create Datasets')
     train_dataset = BaseDataset(dataset_path=args.data_path, mode='train', transform=train_transform, global_config = global_config)
@@ -286,14 +305,23 @@ def main(args:Namespace):
         
     print(' * Create Model / Criterion / optimizer')
     model = eval('{model}()'.format(model = args.model))
-    # f_alpha = torch.tensor([1.44,44.33,11.04,139.99,111.34,130.32,34.69,66.27,8.56,2162.59,187.92])
-    # f_alpha = torch.tensor([0.0007, 0.0205, 0.0051, 0.0647, 0.0515, 0.0603, 0.016 , 0.0306, 0.004 , 1.0, 0.0869])
-    # f_alpha = torch.tensor([0.0054, 0.1682, 0.0419, 0.5313, 0.4225, 0.4946, 0.1317, 0.2515, 0.0325, 8.2072, 0.7132])
-    # f_alpha = f_alpha.to(args.device)
-    f_alpha = 1.
-    criterion = FocalLoss(f_alpha, gamma = 2.0, reduction = 'mean')#nn.CrossEntropyLoss()
+    if args.fl_alpha == 'basic':
+        f_alpha = torch.tensor([1.44,44.33,11.04,139.99,111.34,130.32,34.69,66.27,8.56,2162.59,187.92]).to(args.device)
+    elif args.fl_alpha == 'max':
+        f_alpha = torch.tensor([0.0007, 0.0205, 0.0051, 0.0647, 0.0515, 0.0603, 0.016 , 0.0306, 0.004 , 1.0, 0.0869]).to(args.device)
+    elif args.fl_alpha == 'avg':
+        f_alpha = torch.tensor([0.0054, 0.1682, 0.0419, 0.5313, 0.4225, 0.4946, 0.1317, 0.2515, 0.0325, 8.2072, 0.7132]).to(args.device)
+    elif args.fl_alpha == 'miou':
+        # f_alpha = torch.tensor([0.1, 0.6, 0.3, 0.6, 0.5, 0.5, 0.6, 0.3, 0.2, 0.4, 0.5]).to(args.device)
+        f_alpha = torch.tensor([0.2, 1.2, 0.6, 1.2, 1.2, 1.0, 1.2, 0.6, 0.4, 2.0, 1.4]).to(args.device)
+    else:
+        f_alpha = float(args.fl_alpha)
+    criterion = FocalLoss(f_alpha, gamma = 2.0, reduction = 'mean', ls=args.ls)#nn.CrossEntropyLoss()
     optimizer = get_optimizer(model, args=args)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer=optimizer, step_size=args.scheduler_step, gamma = args.scheduler_gamma)
+
+    print(' * init wandb')
+    init_wandb(args=args)
 
     print(' * Start Training')
     train(args, global_config, model=model, optimizer=optimizer, criterion=criterion, scheduler=scheduler, train_loader=train_loader, val_loader=val_loader)

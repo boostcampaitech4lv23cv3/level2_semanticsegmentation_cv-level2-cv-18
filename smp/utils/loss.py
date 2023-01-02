@@ -56,7 +56,13 @@ def label_to_one_hot_label(
 
 
 # https://github.com/zhezh/focalloss/blob/master/focalloss.py
-def focal_loss(input:torch.Tensor, target:torch.Tensor, alpha, gamma:float, reduction:str, eps:float, ignore_index:int):
+def focal_loss(input:torch.Tensor, 
+                target:torch.Tensor, 
+                alpha, gamma:float, 
+                reduction:str, eps:float, 
+                ignore_index:int,
+                ls: float = 0.1
+                ):
     """
     Example:
         >>> N = 5  # num_classes
@@ -103,6 +109,11 @@ def focal_loss(input:torch.Tensor, target:torch.Tensor, alpha, gamma:float, redu
     # create the labels one hot tensor
     # target_one_hot : (B, C, H, W)
     target_one_hot = label_to_one_hot_label(target.long(), num_classes=input.shape[1], device=input.device, dtype=input.dtype, ignore_index=ignore_index)
+    
+    # label smoothing
+    target_one_hot = ((1.0 - ls) * target_one_hot) + ls / target_one_hot.shape[1]
+    m = torch.min(target_one_hot)
+    m = torch.max(target_one_hot)
 
     # compute the actual focal loss
     weight = torch.pow(1.0 - input_soft, gamma)
@@ -130,13 +141,21 @@ def focal_loss(input:torch.Tensor, target:torch.Tensor, alpha, gamma:float, redu
 
 class FocalLoss(nn.Module):
 
-    def __init__(self, alpha, gamma = 2.0, reduction = 'mean', eps = 1e-8, ignore_index=30):
+    def __init__(self, alpha, gamma:float = 2.0, reduction:str = 'mean', eps:float = 1e-8, ignore_index:int=30, ls:float=0.1):
         super().__init__()
         self.alpha = alpha
         self.gamma = gamma
         self.reduction = reduction
         self.eps = eps
         self.ignore_index = ignore_index
+        self.ls = ls
 
     def forward(self, input, target):
-        return focal_loss(input, target, self.alpha, self.gamma, self.reduction, self.eps, self.ignore_index)
+        return focal_loss(
+            input=input, target=target, 
+            alpha=self.alpha, 
+            gamma=self.gamma, 
+            reduction=self.reduction, 
+            eps=self.eps, ignore_index=self.ignore_index,
+            ls=self.ls
+            )
