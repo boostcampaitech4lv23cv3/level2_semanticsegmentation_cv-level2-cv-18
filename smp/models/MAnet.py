@@ -1,11 +1,11 @@
 import torch
 import segmentation_models_pytorch as smp
 
-class Efficientb2_Unet(torch.nn.Module):
+class Resnext101_MAnet(torch.nn.Module):
     def __init__(self) -> None:
         super().__init__()
-        self.segbackbone = smp.Unet(
-                                    encoder_name="efficientnet-b2", # choose encoder, e.g. mobilenet_v2 or efficientnet-b7
+        self.segbackbone = smp.MAnet(
+                                    encoder_name="resnext101_32x8d", # choose encoder, e.g. mobilenet_v2 or efficientnet-b7
                                     encoder_weights="imagenet",     # use `imagenet` pre-trained weights for encoder initialization
                                     in_channels=3,                  # model input channels (1 for gray-scale images, 3 for RGB, etc.)
                                     classes=11,                     # model output channels (number of classes in your dataset)
@@ -18,11 +18,11 @@ class Efficientb2_Unet(torch.nn.Module):
             'out' : x
         }
 
-class Efficientb3_Unet(torch.nn.Module):
+class Resnext50_MAnet(torch.nn.Module):
     def __init__(self) -> None:
         super().__init__()
-        self.segbackbone = smp.Unet(
-                                    encoder_name="efficientnet-b3", # choose encoder, e.g. mobilenet_v2 or efficientnet-b7
+        self.segbackbone = smp.MAnet(
+                                    encoder_name="resnext50_32x4d", # choose encoder, e.g. mobilenet_v2 or efficientnet-b7
                                     encoder_weights="imagenet",     # use `imagenet` pre-trained weights for encoder initialization
                                     in_channels=3,                  # model input channels (1 for gray-scale images, 3 for RGB, etc.)
                                     classes=11,                     # model output channels (number of classes in your dataset)
@@ -35,11 +35,11 @@ class Efficientb3_Unet(torch.nn.Module):
             'out' : x
         }
 
-class Efficientb4_Unet(torch.nn.Module):
+class SEResnext101_MAnet(torch.nn.Module):
     def __init__(self) -> None:
         super().__init__()
-        self.segbackbone = smp.Unet(
-                                    encoder_name="efficientnet-b4", # choose encoder, e.g. mobilenet_v2 or efficientnet-b7
+        self.segbackbone = smp.MAnet(
+                                    encoder_name="se_resnext101_32x4d", # choose encoder, e.g. mobilenet_v2 or efficientnet-b7
                                     encoder_weights="imagenet",     # use `imagenet` pre-trained weights for encoder initialization
                                     in_channels=3,                  # model input channels (1 for gray-scale images, 3 for RGB, etc.)
                                     classes=11,                     # model output channels (number of classes in your dataset)
@@ -47,6 +47,7 @@ class Efficientb4_Unet(torch.nn.Module):
         
     def forward(self, x):
         x = self.segbackbone(x)    
+
         return {
             'out' : x
         }

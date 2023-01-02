@@ -61,6 +61,7 @@ def parse_args() -> Namespace:
     parser.add_argument('--momentum', type=float, default=0.9)
     parser.add_argument('--scheduler_step', type=float, default=25)
     parser.add_argument('--scheduler_gamma', type=float, default=0.5)
+    parser.add_argument('--loss', type=str, default='cross_entropy')
     parser.add_argument('--ls', type=float, default=0.0)
     parser.add_argument('--fl_alpha', type=str, default='1.0')
     
@@ -154,7 +155,7 @@ def train(args:Namespace, global_config:dict, model, optimizer, criterion, sched
     device = args.device
     num_epochs = args.epoch
     train_best_loss = 9999999
-    train_best_mIoU = 9999999
+    train_best_mIoU = 0
     val_every = args.val_every
     val_best_loss = 9999999
     val_best_mIoU = 0
@@ -290,7 +291,8 @@ def main(args:Namespace):
                                            batch_size=args.batch_size,
                                            shuffle=True,
                                            num_workers=4,
-                                           worker_init_fn=seed_worker,
+                                           worker_init_fn=seed_worker, 
+                                           drop_last=True,
                                            collate_fn=collate_fn)
 
     val_loader = DataLoader(dataset=val_dataset, 
@@ -302,18 +304,7 @@ def main(args:Namespace):
 
     print(' * Create Model / Criterion / optimizer')
     model = eval('{model}()'.format(model = args.model))
-    if args.fl_alpha == 'basic':
-        f_alpha = torch.tensor([1.44,44.33,11.04,139.99,111.34,130.32,34.69,66.27,8.56,2162.59,187.92]).to(args.device)
-    elif args.fl_alpha == 'max':
-        f_alpha = torch.tensor([0.0007, 0.0205, 0.0051, 0.0647, 0.0515, 0.0603, 0.016 , 0.0306, 0.004 , 1.0, 0.0869]).to(args.device)
-    elif args.fl_alpha == 'avg':
-        f_alpha = torch.tensor([0.0054, 0.1682, 0.0419, 0.5313, 0.4225, 0.4946, 0.1317, 0.2515, 0.0325, 8.2072, 0.7132]).to(args.device)
-    elif args.fl_alpha == 'miou':
-        # f_alpha = torch.tensor([0.1, 0.6, 0.3, 0.6, 0.5, 0.5, 0.6, 0.3, 0.2, 0.4, 0.5]).to(args.device)
-        f_alpha = torch.tensor([0.2, 1.2, 0.6, 1.2, 1.2, 1.0, 1.2, 0.6, 0.4, 2.0, 1.4]).to(args.device)
-    else:
-        f_alpha = float(args.fl_alpha)
-    criterion = FocalLoss(f_alpha, gamma = 2.0, reduction = 'mean', ls=args.ls)#nn.CrossEntropyLoss()
+    criterion = get_loss(args=args)
     optimizer = get_optimizer(model, args=args)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer=optimizer, step_size=args.scheduler_step, gamma = args.scheduler_gamma)
 
