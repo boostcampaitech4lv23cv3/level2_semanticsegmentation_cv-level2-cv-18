@@ -23,6 +23,7 @@ from data_loader import *
 import wandb
 from sweep import *
 from functools import partial
+import pprint
 
 class_labels = {
     0: "Background",
@@ -55,12 +56,12 @@ def parse_args() -> Namespace:
     parser.add_argument('--model', type=str, default='FCN_Resnet50')
     parser.add_argument('--batch_size', type=int, default=8)
     parser.add_argument('--val_every', type=int, default=1)
-    parser.add_argument('--epoch', type=int, default=10)
+    parser.add_argument('--epoch', type=int, default=1)
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--optimizer', type=str, default='adamw')
     parser.add_argument('--weight_decay', type=float, default=1e-4)
     parser.add_argument('--momentum', type=float, default=0.9)
-    parser.add_argument('--scheduler_step', type=float, default=10)
+    parser.add_argument('--scheduler_step', type=float, default=2)
     parser.add_argument('--scheduler_gamma', type=float, default=0.5)
     
     parser.add_argument('--valid_img', type=bool, default=True)
@@ -244,7 +245,8 @@ def train(args:Namespace, global_config:dict, model, optimizer, criterion, sched
 def main(args:Namespace):
     if args.sweep:
         sweep_init(args)
-        # args = concat_config(args, wandb.config)
+        args = concat_config(args, wandb.config)
+        print(args.epoch, args.optimizer , args.batch_size)
     
     else:
         init_wandb(args=args)
@@ -303,8 +305,10 @@ if __name__ == '__main__':
         sweep_config = get_sweep_config()
         sweep_id = get_sweep_id(sweep_config)
         wandb.agent(sweep_id, function=partial(main, args))
+        print('sweep_confing_1')
+        pprint.pprint(sweep_config)
         # sweep_init(args)
-        args = concat_config(args, wandb.config)
+        # args = concat_config(args, wandb.config)
     
     else:
         main(args)
