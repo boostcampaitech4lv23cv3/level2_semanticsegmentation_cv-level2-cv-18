@@ -31,12 +31,12 @@ model = dict(
         pool_scales=(1, 2, 3, 6),
         channels=512,
         dropout_ratio=0.1,
-        num_classes=19,
+        num_classes=11,
         norm_cfg=norm_cfg,
         align_corners=False,
         loss_decode=[
-            dict(type="CrossEntropyLoss", loss_name="loss_ce", loss_weight=0.75 * 0.4),
-            dict(type="DiceLoss", loss_name="loss_dice", loss_weight=0.25 * 0.4),
+            dict(type="CrossEntropyLoss", loss_name="loss_ce", loss_weight=0.75),
+            dict(type="DiceLoss", loss_name="loss_dice", loss_weight=0.25),
         ]),
     auxiliary_head=dict(
         type='FCNHead',
@@ -46,12 +46,12 @@ model = dict(
         num_convs=1,
         concat_input=False,
         dropout_ratio=0.1,
-        num_classes=19,
+        num_classes=11,
         norm_cfg=norm_cfg,
         align_corners=False,
         loss_decode=[
-            dict(type="CrossEntropyLoss", loss_name="loss_ce", loss_weight=0.75 * 0.4),
-            dict(type="DiceLoss", loss_name="loss_dice", loss_weight=0.25 * 0.4),
+            dict(type="CrossEntropyLoss", loss_name="loss_ce", loss_weight=0.75),
+            dict(type="DiceLoss", loss_name="loss_dice", loss_weight=0.25),
         ]),
     # model training and testing settings
     train_cfg=dict(),
