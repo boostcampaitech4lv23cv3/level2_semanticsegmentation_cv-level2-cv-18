@@ -37,6 +37,7 @@ model = dict(
         loss_decode=[
             dict(type="CrossEntropyLoss", loss_name="loss_ce", loss_weight=0.75),
             dict(type="DiceLoss", loss_name="loss_dice", loss_weight=0.25),
+
         ]),
     auxiliary_head=dict(
         type='FCNHead',
@@ -52,6 +53,7 @@ model = dict(
         loss_decode=[
             dict(type="CrossEntropyLoss", loss_name="loss_ce", loss_weight=0.75),
             dict(type="DiceLoss", loss_name="loss_dice", loss_weight=0.25),
+
         ]),
     # model training and testing settings
     train_cfg=dict(),

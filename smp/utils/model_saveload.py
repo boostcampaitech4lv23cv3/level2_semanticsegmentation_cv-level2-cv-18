@@ -62,6 +62,7 @@ def save_model(best_loss:float, best_epoch:int, args:argparse.Namespace, model, 
     torch.save(save_obj, output_path)
     
     print(f"The data has been saved at {output_path}")
+    return output_path
 
 
 def load_model(args:argparse.Namespace):
