@@ -189,3 +189,8 @@ cython_debug/
 faster_rcnn_inference.ipynb
 results/
 
+
+# mmseg
+mmsegmentation/
+work_dirs/
+artifacts/
