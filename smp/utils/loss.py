@@ -1,8 +1,36 @@
+from argparse import Namespace
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
+import segmentation_models_pytorch as smp
 from typing import Optional
+
+def get_loss(args:Namespace) -> nn.Module:
+    loss = nn.CrossEntropyLoss(label_smoothing=args.ls)
+    if args.loss == 'focal':
+        if args.fl_alpha == 'basic':
+            f_alpha = torch.tensor([1.44,44.33,11.04,139.99,111.34,130.32,34.69,66.27,8.56,2162.59,187.92]).to(args.device)
+        elif args.fl_alpha == 'max':
+            f_alpha = torch.tensor([0.0007, 0.0205, 0.0051, 0.0647, 0.0515, 0.0603, 0.016 , 0.0306, 0.004 , 1.0, 0.0869]).to(args.device)
+        elif args.fl_alpha == 'avg':
+            f_alpha = torch.tensor([0.0054, 0.1682, 0.0419, 0.5313, 0.4225, 0.4946, 0.1317, 0.2515, 0.0325, 8.2072, 0.7132]).to(args.device)
+        elif args.fl_alpha == 'miou':
+            f_alpha = torch.tensor([0.2, 1.2, 0.6, 1.2, 1.2, 1.0, 1.2, 0.6, 0.4, 2.0, 1.4]).to(args.device)
+        else:
+            f_alpha = float(args.fl_alpha)
+        loss = FocalLoss(f_alpha, gamma = 2.0, reduction = 'mean', ls=args.ls)
+    elif args.loss == 'dice':
+        loss = smp.losses.DiceLoss(mode='multiclass', smooth=args.ls)
+    elif args.loss == 'jaccard':
+        loss = smp.losses.JaccardLoss(mode='multiclass', smooth=args.ls)
+    elif args.loss == 'cross_entropy':
+        loss = loss
+    else:
+        print(args.loss, ' is not supported option.')
+    print(' * loss : ', loss.__class__.__name__)
+    return loss
+
 
 def label_to_one_hot_label(
     labels: torch.Tensor,
@@ -12,34 +40,6 @@ def label_to_one_hot_label(
     eps: float = 1e-6,
     ignore_index=255,
 ) -> torch.Tensor:
-    r"""Convert an integer label x-D tensor to a one-hot (x+1)-D tensor.
-
-    Args:
-        labels: tensor with labels of shape :math:`(N, *)`, where N is batch size.
-          Each value is an integer representing correct classification.
-        num_classes: number of classes in labels.
-        device: the desired device of returned tensor.
-        dtype: the desired data type of returned tensor.
-
-    Returns:
-        the labels in one hot tensor of shape :math:`(N, C, *)`,
-
-    Examples:
-        >>> labels = torch.LongTensor([
-                [[0, 1], 
-                [2, 0]]
-            ])
-        >>> one_hot(labels, num_classes=3)
-        tensor([[[[1.0000e+00, 1.0000e-06],
-                  [1.0000e-06, 1.0000e+00]],
-        
-                 [[1.0000e-06, 1.0000e+00],
-                  [1.0000e-06, 1.0000e-06]],
-        
-                 [[1.0000e-06, 1.0000e-06],
-                  [1.0000e+00, 1.0000e-06]]]])
-
-    """
     shape = labels.shape
     # one hot : (B, C=ignore_index+1, H, W)
     one_hot = torch.zeros((shape[0], ignore_index+1) + shape[1:], device=device, dtype=dtype)
@@ -56,7 +56,13 @@ def label_to_one_hot_label(
 
 
 # https://github.com/zhezh/focalloss/blob/master/focalloss.py
-def focal_loss(input:torch.Tensor, target:torch.Tensor, alpha, gamma:float, reduction:str, eps:float, ignore_index:int):
+def focal_loss(input:torch.Tensor, 
+                target:torch.Tensor, 
+                alpha, gamma:float, 
+                reduction:str, eps:float, 
+                ignore_index:int,
+                ls: float = 0.1
+                ):
     """
     Example:
         >>> N = 5  # num_classes
@@ -103,6 +109,11 @@ def focal_loss(input:torch.Tensor, target:torch.Tensor, alpha, gamma:float, redu
     # create the labels one hot tensor
     # target_one_hot : (B, C, H, W)
     target_one_hot = label_to_one_hot_label(target.long(), num_classes=input.shape[1], device=input.device, dtype=input.dtype, ignore_index=ignore_index)
+    
+    # label smoothing
+    target_one_hot = ((1.0 - ls) * target_one_hot) + ls / target_one_hot.shape[1]
+    m = torch.min(target_one_hot)
+    m = torch.max(target_one_hot)
 
     # compute the actual focal loss
     weight = torch.pow(1.0 - input_soft, gamma)
@@ -130,13 +141,21 @@ def focal_loss(input:torch.Tensor, target:torch.Tensor, alpha, gamma:float, redu
 
 class FocalLoss(nn.Module):
 
-    def __init__(self, alpha, gamma = 2.0, reduction = 'mean', eps = 1e-8, ignore_index=30):
+    def __init__(self, alpha, gamma:float = 2.0, reduction:str = 'mean', eps:float = 1e-8, ignore_index:int=30, ls:float=0.1):
         super().__init__()
         self.alpha = alpha
         self.gamma = gamma
         self.reduction = reduction
         self.eps = eps
         self.ignore_index = ignore_index
+        self.ls = ls
 
     def forward(self, input, target):
-        return focal_loss(input, target, self.alpha, self.gamma, self.reduction, self.eps, self.ignore_index)
+        return focal_loss(
+            input=input, target=target, 
+            alpha=self.alpha, 
+            gamma=self.gamma, 
+            reduction=self.reduction, 
+            eps=self.eps, ignore_index=self.ignore_index,
+            ls=self.ls
+            )

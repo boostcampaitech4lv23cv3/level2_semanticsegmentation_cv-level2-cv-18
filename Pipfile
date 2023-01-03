@@ -23,6 +23,7 @@ funcy = "*"
 argparse = "*"
 scikit-multilearn = "*"
 scikit-learn = "*"
+openmim = "*"
 
 [dev-packages]
 gpustat = "*"
