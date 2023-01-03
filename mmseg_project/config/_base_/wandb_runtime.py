@@ -1,13 +1,13 @@
 # yapf:disable
 log_config = dict(
-    interval=10,
+    interval=20,
     hooks=[
         dict(type='TextLoggerHook', by_epoch=True),
         dict(type='MMSegWandbHook',
                      init_kwargs={
                          'entity': "light-observer",
                          'project': "Trash_MMseg",
-                         "name": "model test"
+                         "name": "upernet_tiny_convnext_test"
                      },
                     num_eval_images=0)
         # dict(type='TensorboardLoggerHook')
