@@ -186,11 +186,11 @@ def main():
 
     # set random seeds
     cfg.device = get_device()
-    seed = init_random_seed(args.seed, device=cfg.device)
+    seed = init_random_seed(42, device=cfg.device)
     seed = seed + dist.get_rank() if args.diff_seed else seed
     logger.info(f'Set random seed to {seed}, '
                 f'deterministic: {args.deterministic}')
-    set_random_seed(seed, deterministic=args.deterministic)
+    set_random_seed(seed, deterministic=True)
     cfg.seed = seed
     meta['seed'] = seed
     meta['exp_name'] = osp.basename(args.config)
