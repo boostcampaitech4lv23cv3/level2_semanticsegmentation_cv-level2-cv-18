@@ -1,5 +1,4 @@
 from .encoder import *
-import segmentation_models_pytorch as smp
 
 
 # swin_transformer_v2_t
