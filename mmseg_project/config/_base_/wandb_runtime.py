@@ -7,7 +7,7 @@ log_config = dict(
                      init_kwargs={
                          'entity': "light-observer",
                          'project': "Trash_MMseg",
-                         "name": "model test"
+                         "name": "uper_conv_tiny_fullpreTrain"
                      },
                     num_eval_images=0)
         # dict(type='TensorboardLoggerHook')
