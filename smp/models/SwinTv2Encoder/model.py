@@ -1,11 +1,13 @@
+# https://github.com/ChristophReich1996/Swin-Transformer-V2
 from typing import Tuple, List
 
 import torch
 import torch.nn as nn
+import segmentation_models_pytorch as smp
+from segmentation_models_pytorch.encoders._base import EncoderMixin
+from .model_parts import PatchEmbedding, SwinTransformerStage
 
-from swin_transformer_v2.model_parts import PatchEmbedding, SwinTransformerStage
-
-__all__: List[str] = ["SwinTransformerV2"]
+# __all__: List[str] = ["SwinTransformerV2"]
 
 
 class SwinTransformerV2(nn.Module):
@@ -55,7 +57,7 @@ class SwinTransformerV2(nn.Module):
         # Compute patch resolution
         patch_resolution: Tuple[int, int] = (input_resolution[0] // patch_size, input_resolution[1] // patch_size)
         # Path dropout dependent on depth
-        dropout_path = torch.linspace(0., dropout_path, sum(depths)).tolist()
+        dropout_path_list = torch.linspace(0., dropout_path, sum(depths)).tolist() # type: ignore
         # Init stages
         self.stages: nn.ModuleList = nn.ModuleList()
         for index, (depth, number_of_head) in enumerate(zip(depths, number_of_heads)):
@@ -71,7 +73,7 @@ class SwinTransformerV2(nn.Module):
                     ff_feature_ratio=ff_feature_ratio,
                     dropout=dropout,
                     dropout_attention=dropout_attention,
-                    dropout_path=dropout_path[sum(depths[:index]):sum(depths[:index + 1])],
+                    dropout_path=dropout_path_list[sum(depths[:index]):sum(depths[:index + 1])],
                     use_checkpoint=use_checkpoint,
                     sequential_self_attention=sequential_self_attention,
                     use_deformable_block=use_deformable_block and (index > 0)
@@ -90,7 +92,7 @@ class SwinTransformerV2(nn.Module):
         for index, stage in enumerate(self.stages):  # type: int, SwinTransformerStage
             stage.update_resolution(new_window_size=new_window_size,
                                     new_input_resolution=(new_patch_resolution[0] // (2 ** max(index - 1, 0)),
-                                                          new_patch_resolution[1] // (2 ** max(index - 1, 0))))
+                                                          new_patch_resolution[1] // (2 ** max(index - 1, 0)))) # type: ignore
 
     def forward(self, input: torch.Tensor) -> List[torch.Tensor]:
         """
@@ -107,6 +109,7 @@ class SwinTransformerV2(nn.Module):
             output: torch.Tensor = stage(output)
             features.append(output)
         return features
+
 
 
 def swin_transformer_v2_t(input_resolution: Tuple[int, int],
