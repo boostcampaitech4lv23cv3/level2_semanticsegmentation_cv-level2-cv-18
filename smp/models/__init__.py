@@ -1,5 +1,6 @@
 # ex : from .util import *
 from .SwinTv2Encoder import *
+from .TimmEncoder import *
 from .DeepLab import *
 from .FCN import *
 from .FPN import *
