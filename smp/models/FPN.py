@@ -155,3 +155,21 @@ class GERNet_FPN(torch.nn.Module):
         return {
             'out' : x
         }
+
+
+class SwinTv2t_FPN(torch.nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.segbackbone = smp.FPN(
+                                    encoder_name="swin_transformer_v2_t", # choose encoder, e.g. mobilenet_v2 or efficientnet-b7
+                                    encoder_weights = None,
+                                    in_channels=3,                  # model input channels (1 for gray-scale images, 3 for RGB, etc.)
+                                    classes=11,                     # model output channels (number of classes in your dataset)
+                                )
+        
+    def forward(self, x):
+        x = self.segbackbone(x)    
+
+        return {
+            'out' : x
+        }
