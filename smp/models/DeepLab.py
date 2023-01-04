@@ -1,4 +1,5 @@
 import torch
+from torchvision import models
 import segmentation_models_pytorch as smp
 
 class T_Efficientb3_DeepLabV3Plus(torch.nn.Module):
@@ -34,3 +35,12 @@ class Efficientb3_DeepLabV3Plus(torch.nn.Module):
         return {
             'out' : x
         }
+
+class Deeplabv3_Resnet101(torch.nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.segbackbone = models.segmentation.deeplabv3_resnet101(num_classes=11)
+        
+    def forward(self, x):
+        x = self.segbackbone(x)    
+        return x

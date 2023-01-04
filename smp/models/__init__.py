@@ -7,3 +7,6 @@ from .PAN import *
 from .Unet import *
 from .Linknet import *
 from .PSPNet import *
+from .LRASPP import *
+from .UperNet import *
+from .HRNet import *
