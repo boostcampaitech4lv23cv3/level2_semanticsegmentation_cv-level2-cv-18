@@ -26,10 +26,27 @@ def get_loss(args:Namespace) -> nn.Module:
         loss = smp.losses.JaccardLoss(mode='multiclass', smooth=args.ls)
     elif args.loss == 'cross_entropy':
         loss = loss
+    elif args.loss == 'mix':
+        loss = MixLoss(args=args)
     else:
         print(args.loss, ' is not supported option.')
     print(' * loss : ', loss.__class__.__name__)
     return loss
+
+class MixLoss(nn.Module):
+    def __init__(self, args:Namespace) -> None:
+        super().__init__()
+        self.ce_loss = smp.losses.SoftCrossEntropyLoss(smooth_factor=args.ls)
+        self.focal_loss = smp.losses.FocalLoss(mode='multiclass', alpha=1.0)
+        self.dice_loss = smp.losses.DiceLoss(mode='multiclass', smooth=args.ls)
+        self.jaccard_loss = smp.losses.JaccardLoss(mode='multiclass', smooth=args.ls)
+
+    def forward(self, y_pred: torch.Tensor, y_true: torch.Tensor) -> torch.Tensor:
+        ce = 0.25 * self.ce_loss(y_pred, y_true)
+        fo = 0.25 * self.focal_loss(y_pred, y_true)
+        di = 0.25 * self.dice_loss(y_pred, y_true)
+        ja = 0.25 * self.jaccard_loss(y_pred, y_true)
+        return ce + fo + di + ja
 
 
 def label_to_one_hot_label(
