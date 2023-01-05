@@ -27,9 +27,11 @@ class BaseDataset(Dataset):
         self.global_config = global_config
         self.keys = list(self.global_config['Category'].keys())
         if self.mode == 'train':
-            self.json_name = 'train.json'
+            self.json_name = 'train_revised_final.json'
+        elif mode == 'train_all':
+            self.json_name = 'train_all.json'
         elif mode == 'val':
-            self.json_name = 'val.json'
+            self.json_name = 'val_revised_final.json'
         elif mode == 'test':
             self.json_name = 'test.json'
         else:
@@ -39,15 +41,14 @@ class BaseDataset(Dataset):
 
     def __getitem__(self, index: int):
         # dataset이 index되어 list처럼 동작
-        image_id = self.coco.getImgIds(imgIds=index)
+        image_id = self.coco.dataset['images'][index]['id']#self.coco.getImgIds(imgIds=index)
         image_infos = self.coco.loadImgs(image_id)[0] # type: ignore    
-        
         # cv2 를 활용하여 image 불러오기
         images = cv2.imread(os.path.join(self.dataset_path, image_infos['file_name']))
         images = cv2.cvtColor(images, cv2.COLOR_BGR2RGB).astype(np.float32)
         # images /= 255.0
         
-        if (self.mode in ('train', 'val')):
+        if (self.mode in ('train', 'val', 'train_all')):
             ann_ids = self.coco.getAnnIds(imgIds=image_infos['id'])
             anns = self.coco.loadAnns(ann_ids)
 
