@@ -24,6 +24,7 @@ argparse = "*"
 scikit-multilearn = "*"
 scikit-learn = "*"
 timm = "*"
+openmim = "*"
 
 [dev-packages]
 gpustat = "*"
