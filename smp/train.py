@@ -270,14 +270,16 @@ def main(args:Namespace):
 
     print(' * Create Transforms')
     train_transform = A.Compose([
-                                A.OneOf([
-                                        A.Flip(p=1),
-                                        A.RandomRotate90(p=1)
-                                    ], p=0.9),
-                                A.RandomResizedCrop(width=args.input_size, height=args.input_size, scale=(0.5, 1.0)),
-                                A.ColorJitter(brightness=0.2, contrast=0.0, saturation=0.0, hue=0.5),
-                                A.GaussNoise(var_limit=(10.0, 50.0), mean=0, per_channel=True, always_apply=False, p=0.5),
-                                A.ToGray(p=0.2),
+                                # A.OneOf([
+                                #         A.Flip(p=1),
+                                #         A.RandomRotate90(p=1)
+                                #     ], p=0.9),
+                                A.Resize(width=args.input_size, height=args.input_size),
+                                A.Flip(),
+                                # A.RandomResizedCrop(width=args.input_size, height=args.input_size, scale=(0.5, 1.0)),
+                                A.ColorJitter(brightness=0.0, contrast=0.0, saturation=0.0, hue=0.5),
+                                # A.GaussNoise(var_limit=(10.0, 50.0), mean=0, per_channel=True, always_apply=False, p=0.5),
+                                # A.ToGray(p=0.2),
                                 A.Normalize(),
                                 ToTensorV2()
                                 ])
