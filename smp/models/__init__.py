@@ -1,4 +1,6 @@
 # ex : from .util import *
+from .SwinTv2Encoder import *
+from .TimmEncoder import *
 from .DeepLab import *
 from .FCN import *
 from .FPN import *
@@ -7,3 +9,5 @@ from .PAN import *
 from .Unet import *
 from .Linknet import *
 from .PSPNet import *
+from .LRASPP import *
+from .UperNet import *
