@@ -149,6 +149,13 @@ TimmSwinTv2_encoders = {
             "model": "swinv2_base_window8_256"
         },
     },
+    "swinv2_base_w24i384": {
+        "encoder": TimmSwinTv2_Encoder,
+        "pretrained_settings": {},
+        "params": {
+            "model": "swinv2_base_window12to24_192to384_22kft1k"
+        },
+    },
     "timm_swinv2_cr_small_224": {
         "encoder": TimmSwinTv2Cr_Encoder,
         "pretrained_settings": {},
