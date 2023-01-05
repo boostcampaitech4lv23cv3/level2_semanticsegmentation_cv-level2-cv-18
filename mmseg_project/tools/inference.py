@@ -188,7 +188,7 @@ def main(args):
         format_args=eval_kwargs)
     prediction_strings = []
     file_names = []
-    esults = np.array(results)
+    results = np.array(results)
     coco = COCO('/opt/ml/input/data/test.json')
     for i, out in enumerate(results):
         image_info = coco.loadImgs(coco.getImgIds(imgIds=i))[0]
