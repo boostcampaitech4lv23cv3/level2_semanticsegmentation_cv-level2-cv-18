@@ -185,3 +185,33 @@ class Resnet_UperNet_Base(BaseModel):
     def freeze_bn(self):
         for module in self.modules():
             if isinstance(module, nn.BatchNorm2d): module.eval()
+
+class Custom_UperNet(BaseModel):
+    # Implementing only the object path
+    def __init__(self, backbone, feature_channels, num_classes=11, in_channels=3, pretrained=True, use_aux=True, fpn_out=256, freeze_bn=False, **_):
+        super(Custom_UperNet, self).__init__()
+        self.feature_channels = feature_channels
+        self.backbone = backbone
+        self.PPN = PSPModule(feature_channels[-1])
+        self.FPN = FPN_fuse(feature_channels, fpn_out=fpn_out)
+        self.head = nn.Conv2d(fpn_out, num_classes, kernel_size=3, padding=1)
+
+    def forward(self, x):
+        input_size = (x.size()[2], x.size()[3])
+
+        features = self.backbone(x)
+        features[-1] = self.PPN(features[-1])
+        x = self.head(self.FPN(features))
+
+        x = F.interpolate(x, size=input_size, mode='bilinear')
+        return x
+
+    def get_backbone_params(self):
+        return self.backbone.parameters()
+
+    def get_decoder_params(self):
+        return chain(self.PPN.parameters(), self.FPN.parameters(), self.head.parameters())
+
+    def freeze_bn(self):
+        for module in self.modules():
+            if isinstance(module, nn.BatchNorm2d): module.eval()
