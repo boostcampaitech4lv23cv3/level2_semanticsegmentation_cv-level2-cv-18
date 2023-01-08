@@ -22,7 +22,7 @@ albu_train_transforms =[
             dict(
                 type='OneOf',
                 transforms=[
-                    dict(type='Flip', p=1.0),
+                    #dict(type='Flip', p=1.0),
                     dict(type='RandomRotate90', p=1.0),
                 ],
                 p=0.9),
@@ -60,7 +60,7 @@ train_pipeline = [
         },
         update_pad_shape=False,
         ),
-    #dict(type='RandomFlip', prob=0.5),
+    dict(type='RandomFlip', prob=0.5),
     #dict(type='PhotoMetricDistortion'),
     dict(type='Normalize', **img_norm_cfg),
     dict(type='Pad', size=img_size, pad_val=0, seg_pad_val=255),
@@ -90,7 +90,7 @@ data = dict(
         data_root=data_root,
         # reduce_zero_label=True,
         img_dir=data_root,
-        coco_json_path = '/opt/ml/input/data/train_revised_final.json',
+        coco_json_path = '/opt/ml/input/data/train.json',
         classes=classes,
         pipeline=train_pipeline),
     val=dict(
@@ -98,7 +98,7 @@ data = dict(
         data_root=data_root,
         # reduce_zero_label=True,
         img_dir=data_root,
-        coco_json_path = '/opt/ml/input/data/val_revised_final.json',
+        coco_json_path = '/opt/ml/input/data/val.json',
         classes=classes,
         pipeline=test_pipeline),
     test=dict(

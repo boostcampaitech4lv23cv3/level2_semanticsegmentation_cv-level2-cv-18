@@ -1,6 +1,6 @@
 _base_ = [
     '../_base_/models/upernet_beit.py', '../_base_/datasets/custom_trash_withaug.py',
-    '../_base_/wandb_runtime.py', '../_base_/schedules/T4148_schedule_cosine.py'
+    '../_base_/wandb_runtime.py', '../_base_/schedules/T4148_schedule_40k.py'
 ]
 
 model = dict(
