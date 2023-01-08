@@ -46,6 +46,7 @@ def parse_args() -> Namespace:
     parser.add_argument('--config_path', type=str, default='./')
     parser.add_argument('--config_file', type=str, default='config.json')
     parser.add_argument('--data_path', type=str, default='../../input/data')
+    parser.add_argument('--data_train_mode', type=str, default='train')
     parser.add_argument('--save_path', type=str, default='../.local/checkpoints')
     parser.add_argument('--save_name', type=str, default='{model}/{time}_best.tar')
     parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu')
@@ -54,7 +55,7 @@ def parse_args() -> Namespace:
     parser.add_argument('--input_size', type=int, default=512)
     parser.add_argument('--batch_size', type=int, default=8)
     parser.add_argument('--val_every', type=int, default=1)
-    parser.add_argument('--epoch', type=int, default=100)
+    parser.add_argument('--epoch', type=int, default=50)
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--optimizer', type=str, default='adamw')
     parser.add_argument('--weight_decay', type=float, default=1e-6)
@@ -269,11 +270,17 @@ def main(args:Namespace):
 
     print(' * Create Transforms')
     train_transform = A.Compose([
-                                A.RandomResizedCrop(width=args.input_size, height=args.input_size, scale=(0.5, 1.0)),
-                                A.HorizontalFlip(p=0.5),
-                                A.VerticalFlip(p=0.5),
+                                # A.OneOf([
+                                #         A.Flip(p=1),
+                                #         A.RandomRotate90(p=1)
+                                #     ], p=0.9),
+                                A.Resize(width=args.input_size, height=args.input_size),
+                                A.Flip(),
+                                # A.RandomResizedCrop(width=args.input_size, height=args.input_size, scale=(0.5, 1.0)),
                                 A.ColorJitter(brightness=0.0, contrast=0.0, saturation=0.0, hue=0.5),
-                                A.augmentations.transforms.Normalize(),
+                                # A.GaussNoise(var_limit=(10.0, 50.0), mean=0, per_channel=True, always_apply=False, p=0.5),
+                                # A.ToGray(p=0.2),
+                                A.Normalize(),
                                 ToTensorV2()
                                 ])
     val_transform = A.Compose([
@@ -283,7 +290,7 @@ def main(args:Namespace):
                                 ])
                               
     print(' * Create Datasets')
-    train_dataset = BaseDataset(dataset_path=args.data_path, mode='train', transform=train_transform, global_config = global_config)
+    train_dataset = BaseDataset(dataset_path=args.data_path, mode=args.data_train_mode, transform=train_transform, global_config = global_config)
     val_dataset = BaseDataset(dataset_path=args.data_path, mode='val', transform=val_transform, global_config = global_config)
 
     print(' * Create Loaders')
