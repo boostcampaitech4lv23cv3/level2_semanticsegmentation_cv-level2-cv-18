@@ -1,9 +1,9 @@
 _base_ = [
-    '../_base_/models/upernet_convnext.py', '../_base_/datasets/custom_trash_withaug.py',
+    '../_base_/models/upernet_convnext.py', '../_base_/datasets/custom_trash_albu.py',
     '../_base_/wandb_runtime.py', '../_base_/schedules/T4148_schedule_40k.py'
 ]
 crop_size = (512, 512)
-checkpoint_file = 'https://download.openmmlab.com/mmclassification/v0/convnext/downstream/convnext-tiny_3rdparty_32xb128-noema_in1k_20220301-795e9634.pth'  # noqa
+checkpoint_file = 'https://download.openmmlab.com/mmsegmentation/v0.5/convnext/upernet_convnext_tiny_fp16_512x512_160k_ade20k/upernet_convnext_tiny_fp16_512x512_160k_ade20k_20220227_124553-cad485de.pth'  # noqa
 model = dict(
     backbone=dict(
         type='mmcls.ConvNeXt',
@@ -47,11 +47,8 @@ lr_config = dict(
     by_epoch=False)
 
 # By default, models are trained on 8 GPUs with 2 images per GPU
-data = dict(samples_per_gpu=2)
+data = dict(samples_per_gpu=16)
 # fp16 settings
 optimizer_config = dict(type='Fp16OptimizerHook', loss_scale='dynamic')
 # fp16 placeholder
 fp16 = dict()
-
-data = dict(
-    samples_per_gpu=16)

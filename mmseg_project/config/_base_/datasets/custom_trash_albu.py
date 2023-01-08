@@ -6,6 +6,7 @@ img_norm_cfg = dict(
     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True)
 img_size = (512, 512)
 
+
 albu_train_transforms =[
             dict(
                 type='ShiftScaleRotate',
@@ -33,11 +34,11 @@ albu_train_transforms =[
                     dict(type='ChannelShuffle', p=1.0)
                 ],
                 p=0.5),
-            dict(
-                type='RandomBrightnessContrast',
-                brightness_limit=0.1,
-                contrast_limit=0.15,
-                p=0.5),
+            # dict(
+            #     type='RandomBrightnessContrast',
+            #     brightness_limit=0.1,
+            #     contrast_limit=0.15,
+            #     p=0.5),
             dict(
                 type='HueSaturationValue',
                 hue_shift_limit=15,
@@ -46,14 +47,14 @@ albu_train_transforms =[
                 p=0.5),
             dict(type='GaussNoise', p=0.3),
             dict(type='CLAHE', p=0.5),
-            dict(
-                type='OneOf',
-                transforms=[
-                    dict(type='Blur', p=1.0),
-                    dict(type='GaussianBlur', p=1.0),
-                    dict(type='MedianBlur', blur_limit=5, p=1.0)
-                ],
-                p=0.3),
+            # dict(
+            #     type='OneOf',
+            #     transforms=[
+            #         dict(type='Blur', p=1.0),
+            #         dict(type='GaussianBlur', p=1.0),
+            #         dict(type='MedianBlur', blur_limit=5, p=1.0)
+            #     ],
+            #     p=0.3),
         ]
 
 train_pipeline = [
